@@ -55,10 +55,20 @@ export interface Feedback {
   comment: string;
 }
 
+/** ヒント開示の記録 (dev サーバが gameday.json に追記。振り返りの集計元) */
+export interface HintReveal {
+  injectId: string;
+  hintId: string;
+  label: string;
+  cost: number;
+  at: string; // ISO8601 タイムスタンプ (サーバ側で付与)
+}
+
 export interface GamedayData {
   event: GamedayEvent;
   injects: Inject[];
   feedback: Feedback[];
+  hintReveals?: HintReveal[];
 }
 
 export function fmtMinutes(value: number): string {

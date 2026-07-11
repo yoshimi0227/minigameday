@@ -200,6 +200,17 @@ td.time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--
 
 .score-penalty { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
 
+/* --- ヒント消費サマリ (振り返りの集計) --- */
+.hint-total { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.hint-total strong { font-size: 20px; color: var(--status-warning); font-variant-numeric: tabular-nums; }
+.hint-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 6px; }
+.hint-summary-group { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.hint-summary-inject { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.hint-summary-subtotal { color: var(--status-warning); font-size: 12px; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.hint-summary-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.hint-summary-item { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.hint-summary-time { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; margin-left: auto; }
+
 /* 結果チップ: アイコン + ラベル (色だけに意味を持たせない) */
 .chip {
   display: inline-flex;

@@ -12,7 +12,7 @@ export default function Hints({
 }: {
   inject: Inject;
   revealed: ReadonlySet<string>;
-  onReveal: (id: string) => void;
+  onReveal: (injectId: string, hintId: string) => void;
 }) {
   const hints = inject.hints ?? [];
   if (hints.length === 0) return null;
@@ -34,7 +34,7 @@ export default function Hints({
                   <p className="hint-text">{h.text}</p>
                 </div>
               ) : (
-                <button type="button" className="hint-reveal" onClick={() => onReveal(h.id)}>
+                <button type="button" className="hint-reveal" onClick={() => onReveal(inject.id, h.id)}>
                   <span className="hint-lock">🔒</span>
                   {`${h.label} を見る`}
                   <span className="hint-cost">{`（−${h.cost}pt）`}</span>

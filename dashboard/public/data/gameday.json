@@ -75,5 +75,6 @@
       "author": "リハーサル",
       "comment": "FIS の experimentReportConfiguration が未設定だった。S3 + ダッシュボード指定で実験レポート PDF を出す (fis-experiment スキルのチェックリスト項目)。"
     }
-  ]
+  ],
+  "hintReveals": []
 }

@@ -51,7 +51,7 @@ export default function ScoreTable({
 }: {
   injects: Inject[];
   revealed: ReadonlySet<string>;
-  onReveal: (id: string) => void;
+  onReveal: (injectId: string, hintId: string) => void;
 }) {
   return (
     <div className="table-wrap">

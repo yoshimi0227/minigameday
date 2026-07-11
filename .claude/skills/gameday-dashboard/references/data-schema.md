@@ -54,8 +54,25 @@ scenarios の「段階ヒント (詰まったら 10 分刻みで開示)」をポ
 | `cost` | number | 消費ポイント。開示するとこの分スコアから引かれる |
 | `text` | string | ヒント本文 |
 
-開示状態はブラウザの localStorage (`gameday-revealed-hints`) に保持され、リロードしても残る。
-運営が採点をやり直しても、開示済みヒントの消費は自動で反映される。
+## hintReveals[] (ヒント開示の記録 — 振り返りの集計元)
+
+参加者がヒントを開示すると、dev サーバ (`dashboard/vite.config.ts` の `/api/reveal-hint`
+ミドルウェア) が gameday.json のこの配列に追記する。**これがイベントの永続記録**で、
+振り返りで「どのヒントに何ポイント使ったか」を集計する。ダッシュボードの「ヒント消費サマリ」
+セクションもここを読む。開示の即時反映はクライアントの localStorage 楽観更新が担い、
+最終的な開示集合は `hintReveals` (サーバ記録) ∪ localStorage の和になる。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `injectId` | string | どのインジェクトのヒントか |
+| `hintId` | string | 開示されたヒントの id |
+| `label` | string | ヒントの短い名前 (サーバが hints から転記) |
+| `cost` | number | 消費ポイント (サーバが hints から転記) |
+| `at` | string | 開示時刻 (ISO8601、サーバが付与) |
+
+注意: 追記は dev サーバ (`npm run dashboard`) 稼働時のみ。静的ビルドや手編集運用では
+記録されない (その場合は localStorage 開示のみ)。書き込みは追記直前に読み直すので
+運営の手編集となるべく競合しないが、同時編集は避ける。
 
 ## feedback[]
 

@@ -3,6 +3,7 @@ import Tiles from './Tiles';
 import ScoreTable from './ScoreTable';
 import TimeChart, { ChartLegend } from './TimeChart';
 import KptBoard from './KptBoard';
+import HintSummary from './HintSummary';
 import type { GamedayData } from './types';
 
 const POLL_MS = 3000; // gameday.json を 3 秒ごとに再取得してリアルタイム反映
@@ -23,7 +24,9 @@ export default function App() {
   const [stale, setStale] = useState(false); // ポーリング失敗 (前回表示を保持)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [scenarioId, setScenarioId] = useState('');
-  const [revealed, setRevealed] = useState<Set<string>>(loadRevealed);
+  // クライアント側の楽観的開示 (即時反映 + 静的ビルドのフォールバック)。
+  // サーバに記録された data.hintReveals と union して最終的な開示集合にする。
+  const [localReveals, setLocalReveals] = useState<Set<string>>(loadRevealed);
 
   // gameday.json を定期ポーリングし、内容が変わったときだけ再描画する。
   // 運営が GameDay 中に JSON を編集すると数秒で画面へ反映される。
@@ -61,16 +64,26 @@ export default function App() {
     if (data) document.title = `${data.event.title} — ダッシュボード`;
   }, [data]);
 
-  const reveal = useCallback((id: string) => {
-    setRevealed((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev).add(id);
+  const reveal = useCallback((injectId: string, hintId: string) => {
+    // 1) 即時反映 + フォールバック用に localStorage へ
+    setLocalReveals((prev) => {
+      if (prev.has(hintId)) return prev;
+      const next = new Set(prev).add(hintId);
       try {
         localStorage.setItem(HINTS_STORAGE_KEY, JSON.stringify([...next]));
       } catch {
         // localStorage 不可でも画面上は開示する
       }
       return next;
+    });
+    // 2) サーバ (dev) に記録 → gameday.json の hintReveals に追記され、ポーリングで全員に共有。
+    //    静的ビルドやエンドポイント不在時は失敗するが、上の楽観更新で画面は開示される。
+    void fetch('api/reveal-hint', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ injectId, hintId }),
+    }).catch(() => {
+      /* 記録は best-effort */
     });
   }, []);
 
@@ -95,6 +108,10 @@ export default function App() {
   const scenarioIds = [
     ...new Set(data.injects.map((i) => i.scenarioId).filter((v): v is string => Boolean(v))),
   ];
+
+  // 最終的な開示集合 = サーバ記録 (hintReveals) ∪ クライアント楽観更新
+  const serverRevealedIds = (data.hintReveals ?? []).map((r) => r.hintId);
+  const revealed = new Set<string>([...serverRevealedIds, ...localReveals]);
 
   return (
     <div className="page">
@@ -138,6 +155,11 @@ export default function App() {
         </p>
         <ScoreTable injects={injects} revealed={revealed} onReveal={reveal} />
       </section>
+
+      <HintSummary
+        reveals={(data.hintReveals ?? []).filter((r) => injects.some((i) => i.id === r.injectId))}
+        injects={injects}
+      />
 
       <section className="card">
         <div className="card-head">
