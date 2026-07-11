@@ -41,7 +41,9 @@ AI に FIS 実験を書かせるときの必須制約。詳細と実装例は `f
 
 - **FIS は L1 (`CfnExperimentTemplate`) で出力する**。`aws-cdk-lib/aws-fis` に L2 は無い。
 - **`stopConditions` 必須**(canary/アラームベース)。停止条件の無い実験はデプロイしない。
-- **ターゲティングは `resourceTags` + `selectionMode` (`COUNT`/`PERCENT`)** で爆発半径を明示する。
+- **ターゲティングで爆発半径を明示する**。対象の性質で使い分ける:
+  - **ephemeral な対象**(ECS タスク等、ARN が実行時にしか決まらない)→ `resourceTags` + `selectionMode` (`COUNT`/`PERCENT`)。同じタグが他リソースに付いていないか確認する。
+  - **deploy 時に ARN が確定する安定リソース**(同一スタックの Aurora クラスタ等)→ CDK 参照経由の `resourceArns` で名指しする方が正確(タグの取り違えが起きず、単一リソースに確実に絞れる)。`FaultInjection` の Aurora フェイルオーバーがこのパターン。「タグで縛る」の唯一解ではなく、"deploy 時に確定するなら ARN、実行時に決まるならタグ" が原則。
 - **`logConfiguration` (CloudWatch Logs) と `experimentReportConfiguration` を設定**する(振り返りの素材)。
 - **アクション仕様は記憶で書かない**。`.claude/skills/fis-experiment/references/fis-actions.md`(検証済みメモ)を読み、無ければ AWS Knowledge MCP / `aws fis list-actions` で確認する。
 - **生成物の置き場所**: シナリオ = `scenarios/NN-<slug>.md`(markdown)、実装コード = `lib/constructs/fault-injection.ts`。

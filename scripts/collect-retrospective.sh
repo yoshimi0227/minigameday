@@ -47,14 +47,36 @@ aws cloudwatch get-metric-statistics \
 echo '```'
 echo
 
-echo "## 3. cdk drift (実リソース vs 期待状態 = 応急処置の痕跡)"
+echo "## 3. 顧客影響: ALB 5xx (HTTPCode_ELB_5XX_Count, 1 分粒度)"
+# GameDay の ALB を名前で特定し、CloudWatch の LoadBalancer ディメンション値 (app/<name>/<id>) を得る
+LB_FULLNAME=$(aws elbv2 describe-load-balancers \
+  --query "LoadBalancers[?starts_with(LoadBalancerName,'GameDa')].LoadBalancerArn | [0]" --output text 2>/dev/null \
+  | sed 's|.*:loadbalancer/||')
+if [ -n "${LB_FULLNAME}" ] && [ "${LB_FULLNAME}" != "None" ]; then
+  echo "LoadBalancer: ${LB_FULLNAME} / 窓: ${WIN_START} 〜 ${WIN_END}"
+  echo '```'
+  aws cloudwatch get-metric-statistics \
+    --namespace AWS/ApplicationELB --metric-name HTTPCode_ELB_5XX_Count \
+    --dimensions Name=LoadBalancer,Value="${LB_FULLNAME}" \
+    --start-time "${WIN_START}" --end-time "${WIN_END}" \
+    --period 60 --statistics Sum \
+    --query "sort_by(Datapoints,&Timestamp)[].[Timestamp,Sum]" --output table 2>&1 | head -40 \
+    || echo "get-metric-statistics (ELB 5xx) に失敗"
+  echo '```'
+  echo "> 全て 0 なら「ユーザーに見える障害は無かった」= 自己回復型の証拠。"
+else
+  echo "(GameDay の ALB が見つからない。デプロイ中か名前が異なる)"
+fi
+echo
+
+echo "## 4. cdk drift (実リソース vs 期待状態 = 応急処置の痕跡)"
 echo '```'
 npx cdk drift "${STACK}" 2>&1 | grep -aviE "^\s*$|Acknowledge with|feature flag|crossStack" | tail -50 \
   || echo "cdk drift に失敗 (リポジトリルートで実行しているか / 認証を確認)"
 echo '```'
 echo
 
-echo "## 4. CDK コードの git diff (参加者が IaC を直したか = フェーズ4-B の痕跡)"
+echo "## 5. CDK コードの git diff (参加者が IaC を直したか = フェーズ4-B の痕跡)"
 echo '```diff'
 git diff -- lib/ bin/ 2>&1 || echo "git diff に失敗"
 echo '```'

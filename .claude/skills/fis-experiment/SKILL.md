@@ -95,7 +95,7 @@ new fis.CfnExperimentTemplate(this, 'StopTaskExperiment', {
 
 - **停止条件**: canary ベースの CloudWatch アラームを `stopConditions` に設定した。`treatMissingData: BREACHING` にした(観測不能な実験は続行しない)。
 - **爆発半径**: `selectionMode` を `COUNT(n)` / `PERCENT(n)` で明示した。`ALL` にする場合はその理由がシナリオに書いてある。
-- **ターゲット限定**: `parameters` (cluster / service) や `resourceTags` で対象スタックのリソースだけに絞った。タグだけに頼る場合、同じタグが他リソースに付いていないか確認した。
+- **ターゲット限定**: 対象の性質で使い分けた — ephemeral な対象 (ECS タスク等) は `parameters` (cluster/service) + `resourceTags`(同じタグが他リソースに付いていないか確認)、deploy 時に ARN が確定する安定リソース (同一スタックの Aurora クラスタ等) は CDK 参照経由の `resourceArns` で名指し(こちらの方が正確)。
 - **IAM 最小権限**: 実験ロールは使用アクションに必要な権限のみ。`Resource: '*'` はタグ検索系 (`tag:GetResources`) に限る。
 - **命名・タグ**: `gameday-*` 命名と `gameday` タグを付けた(振り返り時の識別、および誤って対象外に影響した際に気づけるように)。
 - **実験ログ**: `logConfiguration` (CloudWatch Logs) を設定し、実験ロールにログ配信権限を付けた。振り返りのタイムライン素材になる。

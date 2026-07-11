@@ -121,7 +121,9 @@ export class FaultInjection extends Construct {
         Clusters: {
           resourceType: 'aws:rds:cluster',
           selectionMode: 'ALL',
-          // 対象クラスターを ARN で直接指定
+          // Aurora は deploy 時に ARN が確定する安定リソースなので、タグではなく CDK 参照経由の
+          // ARN で名指しする (同一スタック内では ARN の方が正確。ephemeral な ECS タスクはタグ選択)。
+          // selectionMode: ALL でも対象は resourceArns の 1 クラスタに限定される。
           resourceArns: [databaseCluster.clusterArn],
         },
       },
