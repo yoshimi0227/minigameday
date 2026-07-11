@@ -48,8 +48,14 @@ export class FaultInjection extends Construct {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+    // ハマりどころ 2 点 (実デプロイで判明、2026-07-11):
+    // 1. FIS は末尾 ':*' 付きの log-group ARN を要求する。CDK の `logGroupArn` がまさに
+    //    その形 (':*' = 全ログストリーム)。剥がすと FIS API が "not valid" で弾く。
+    // 2. cloudWatchLogsConfiguration は CDK 上 `any` 型で case 変換されないため、CFN の
+    //    プロパティ名 `LogGroupArn` (PascalCase) をそのまま書く。camelCase だと early
+    //    validation で「未知のプロパティ」として弾かれる。
     const logConfiguration: fis.CfnExperimentTemplate.ExperimentTemplateLogConfigurationProperty = {
-      cloudWatchLogsConfiguration: { logGroupArn: experimentLogs.logGroupArn },
+      cloudWatchLogsConfiguration: { LogGroupArn: experimentLogs.logGroupArn },
       logSchemaVersion: 2,
     };
 
