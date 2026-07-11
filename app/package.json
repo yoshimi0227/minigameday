@@ -1,0 +1,9 @@
+{
+  "name": "gameday-app",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "dependencies": {
+    "mysql2": "^3.11.0"
+  }
+}

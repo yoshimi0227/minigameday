@@ -1,0 +1,26 @@
+# CDK (tsc は noEmit 運用。*.js の一括 ignore は不要 — app/ canaries/ dashboard/ の .js はソース)
+cdk.out/
+node_modules/
+
+# Dashboard build artifacts
+dashboard/dist/
+
+# CDK context with account-specific data (commit cdk.json, ignore local)
+cdk.context.json
+
+# Synthetics build artifacts
+canaries/**/node_modules/
+*.zip
+
+# AWS / secrets
+.env
+.env.*
+*.pem
+credentials
+
+# Editor / OS
+.DS_Store
+*.log
+
+# Claude Code local overrides
+.claude/settings.local.json
