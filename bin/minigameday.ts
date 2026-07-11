@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { AppStack } from '../lib/app-stack';
 import { ObservabilityStack } from '../lib/observability-stack';
 import { FisStack } from '../lib/fis-stack';
+import { LegacyAppStack } from '../lib/legacy-app-stack';
 
 const app = new cdk.App();
 
@@ -29,6 +30,10 @@ new FisStack(app, `${prefix}-Fis`, {
   targetTagValue: appStack.targetTagValue,
   databaseCluster: appStack.databaseCluster,
 });
+
+// scenario-03 (EC2 突然死 → ECS 復旧): 学習用の SPOF 出発点スタック。
+// 本流 3 スタックとは独立。必要な回だけ `cdk deploy GameDay-Legacy` で単体デプロイする。
+new LegacyAppStack(app, `${prefix}-Legacy`);
 
 // GameDay のリソースを識別しやすくするタグ (爆発半径の確認用)
 cdk.Tags.of(app).add('Project', 'mini-gameday');
