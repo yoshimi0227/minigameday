@@ -64,6 +64,13 @@ new fis.CfnExperimentTemplate(this, 'StopTaskExperiment', {
       targets: { Tasks: 'gameday-tasks' },
     },
   },
+  // 実験ログ: 実験タイムライン・アクション詳細を CloudWatch Logs に残す (振り返りの素材)。
+  // logSchemaVersion は必須 (現行は 2)。実験ロールに logs:CreateLogDelivery /
+  // PutResourcePolicy / DescribeResourcePolicies / DescribeLogGroups (Resource: '*') が必要。
+  logConfiguration: {
+    cloudWatchLogsConfiguration: { logGroupArn: experimentLogs.logGroupArn },
+    logSchemaVersion: 2,
+  },
   // 実験レポート: 実験前後のダッシュボードスナップショット付き PDF が S3 に出る。
   // 振り返り (gameday-retrospective スキル) の一次資料になるので原則設定する
   experimentReportConfiguration: {
@@ -91,6 +98,7 @@ new fis.CfnExperimentTemplate(this, 'StopTaskExperiment', {
 - **ターゲット限定**: `parameters` (cluster / service) や `resourceTags` で対象スタックのリソースだけに絞った。タグだけに頼る場合、同じタグが他リソースに付いていないか確認した。
 - **IAM 最小権限**: 実験ロールは使用アクションに必要な権限のみ。`Resource: '*'` はタグ検索系 (`tag:GetResources`) に限る。
 - **命名・タグ**: `gameday-*` 命名と `gameday` タグを付けた(振り返り時の識別、および誤って対象外に影響した際に気づけるように)。
+- **実験ログ**: `logConfiguration` (CloudWatch Logs) を設定し、実験ロールにログ配信権限を付けた。振り返りのタイムライン素材になる。
 - **レポート**: `experimentReportConfiguration` を設定した。省略する場合は振り返り手段を別途確保している。
 
 ## 実行前プリフライト (`aws fis start-experiment` の前)

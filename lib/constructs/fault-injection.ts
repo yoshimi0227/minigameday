@@ -3,7 +3,17 @@ import { Construct } from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as fis from 'aws-cdk-lib/aws-fis';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
+
+// FIS が CloudWatch Logs へログを配信するのに必要な権限 (vended log delivery)。
+// ログ配信系のアクションはリソース単位で絞れないため resources は '*'。
+const LOG_DELIVERY_ACTIONS = [
+  'logs:CreateLogDelivery',
+  'logs:PutResourcePolicy',
+  'logs:DescribeResourcePolicies',
+  'logs:DescribeLogGroups',
+];
 
 export interface FaultInjectionProps {
   /** 実験の停止条件に使う CloudWatch アラーム */
@@ -31,6 +41,18 @@ export class FaultInjection extends Construct {
       value: stopAlarm.alarmArn,
     };
 
+    // 実験ログの配信先。実験タイムライン・アクション詳細を CloudWatch Logs に残し、
+    // 振り返り (gameday-retrospective) の一次素材にする。両実験で共有する。
+    const experimentLogs = new logs.LogGroup(this, 'ExperimentLogs', {
+      logGroupName: '/gameday/fis-experiments',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    const logConfiguration: fis.CfnExperimentTemplate.ExperimentTemplateLogConfigurationProperty = {
+      cloudWatchLogsConfiguration: { logGroupArn: experimentLogs.logGroupArn },
+      logSchemaVersion: 2,
+    };
+
     // ===== シナリオ1: ECS タスクを 1 つ停止 =====
     const ecsRole = new iam.Role(this, 'FisEcsRole', {
       assumedBy: new iam.ServicePrincipal('fis.amazonaws.com'),
@@ -44,11 +66,13 @@ export class FaultInjection extends Construct {
     ecsRole.addToPolicy(
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
+    ecsRole.addToPolicy(new iam.PolicyStatement({ actions: LOG_DELIVERY_ACTIONS, resources: ['*'] }));
 
     const stopTaskTemplate = new fis.CfnExperimentTemplate(this, 'StopOneTask', {
       description: 'GameDay: Fargate タスクを 1 つ停止し、冗長性と回復を観察する',
       roleArn: ecsRole.roleArn,
       stopConditions: [stopCondition],
+      logConfiguration,
       tags: { Name: 'gameday-stop-one-task' },
       targets: {
         Tasks: {
@@ -79,11 +103,13 @@ export class FaultInjection extends Construct {
     rdsRole.addToPolicy(
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
+    rdsRole.addToPolicy(new iam.PolicyStatement({ actions: LOG_DELIVERY_ACTIONS, resources: ['*'] }));
 
     const failoverDbTemplate = new fis.CfnExperimentTemplate(this, 'FailoverDb', {
       description: 'GameDay: Aurora をフェイルオーバーし、書き込み先切替時の挙動を観察する',
       roleArn: rdsRole.roleArn,
       stopConditions: [stopCondition],
+      logConfiguration,
       tags: { Name: 'gameday-failover-db' },
       targets: {
         Clusters: {
