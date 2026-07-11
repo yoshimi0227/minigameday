@@ -1,0 +1,11 @@
+# Git フック管理 (lefthook)。
+# コミット前にソースを Oxlint (vp lint / oxlint-plugin-awscdk) でチェックする。
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      # TS/JS が staged のときだけ起動する。ただし vp lint はプロジェクト全体を対象にする:
+      # awscdk プラグインの型認識リントが tsconfig の型情報を要るため、staged ファイル単体でなく
+      # 全体で検査するのが確実 (この構成では staged だけに絞ると型解決が壊れる)。
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs}"
+      run: npm run lint
