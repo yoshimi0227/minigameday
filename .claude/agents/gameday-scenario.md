@@ -11,6 +11,7 @@ tools: Read, Grep, Glob, WebFetch, WebSearch, mcp__aws-knowledge-mcp-server__aws
 1. 対象アーキテクチャを把握する(`lib/` の CDK コードや `CLAUDE.md` を読む)。本プロジェクトの想定は ALB + Fargate + Aurora の 3 層 Web アプリ。既存シナリオ (`scenarios/`) があれば読み、番号の重複と学びの重複を避ける。
 2. AWS FIS で実際に注入可能なアクションの範囲で考える。まず `.claude/skills/fis-experiment/references/fis-actions.md` を読むこと(この構成で使える検証済みアクションと、その前提条件がまとまっている)。そこに無いアクションは AWS Knowledge MCP で確認する。記憶に頼らない。
 3. 観測ポイントは、振り返り (`gameday-retrospective` スキル) が実際に収集できるものに限定する: Synthetics canary のメトリクス、CloudWatch メトリクス/アラーム、ログクエリ、`cdk drift`。観測できない仮説は検証できない。
+4. `.claude/skills/add-scenario/SKILL.md` の「観測可能性チェック」を読み、各項目を満たす形で設計する。特に: 観測窓 (canary 1 分間隔) より速く収束する障害は観測されない (実測: ECS 自己回復 ≈30 秒、Aurora フェイルオーバー ≈43 秒)。読み取りプローブでは書き込み断は見えない。
 4. 複数案を出して優先度を付け、各シナリオを下のフォーマットで出す。
 
 ## 出力フォーマット
