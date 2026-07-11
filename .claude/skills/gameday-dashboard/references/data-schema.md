@@ -35,9 +35,27 @@
 | `status` | string | `success` / `partial` / `failed` / `pending` |
 | `detectionMinutes` | number | 指示 (障害注入) から検知までの分。未計測なら省略 |
 | `recoveryMinutes` | number | 定常状態に戻るまでの分。未計測なら省略 |
-| `score` | number | 獲得点。未採点なら省略 |
+| `score` | number | 獲得点 (ヒント消費前の素点)。未採点なら省略 |
 | `maxScore` | number | 満点 (通常 100) |
 | `notes` | string | 採点理由・気づき (任意) |
+| `hints` | Hint[] | 段階ヒント (任意)。ポイント消費で開示。下記参照 |
+
+## injects[].hints[] (段階ヒント)
+
+参加者がポイントを消費して開示するヒント。開示すると `cost` が獲得スコアから引かれ、
+実効スコア = `score − 開示済みヒントの cost 合計` (0 下限) がタイル・スコアセルに反映される。
+scenarios の「段階ヒント (詰まったら 10 分刻みで開示)」をポイント制にしたもの。cost は
+方針 < 使う道具 < 具体手順 のように上げていくとよい。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `id` | string | 一意 (例 `h1-1`)。開示状態のキー。**変更・再利用しない** (localStorage に紐づく) |
+| `label` | string | 短い名前 (例 `方針` / `使う道具` / `具体手順`) |
+| `cost` | number | 消費ポイント。開示するとこの分スコアから引かれる |
+| `text` | string | ヒント本文 |
+
+開示状態はブラウザの localStorage (`gameday-revealed-hints`) に保持され、リロードしても残る。
+運営が採点をやり直しても、開示済みヒントの消費は自動で反映される。
 
 ## feedback[]
 

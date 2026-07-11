@@ -7,9 +7,17 @@ description: GameDay ダッシュボードサイト (dashboard/) の運用と変
 
 GameDay 当日の運営コンソール兼、終了後の共有サイト。インジェクト (運営からの指示) ごとのスコア表、検知・復旧時間のチャート、KPT 振り返りフィードバックを表示する。
 
-- 実体: `dashboard/` — React 19 + TypeScript (Vite+ / `@vitejs/plugin-react-oxc`)。コンポーネントは `src/` (App / Tiles / ScoreTable / TimeChart / KptBoard)、型は `src/types.ts`
+- 実体: `dashboard/` — React 19 + TypeScript (Vite+ / `@vitejs/plugin-react-oxc`)。コンポーネントは `src/` (App / Tiles / ScoreTable / TimeChart / KptBoard / Hints)、型は `src/types.ts`
 - データ: `dashboard/public/data/gameday.json` **このファイルの編集がこのスキルの最頻作業**
 - スキーマ: [references/data-schema.md](references/data-schema.md)
+
+## リアルタイム反映
+
+App が `gameday.json` を **3 秒ごとにポーリング**し、内容が変わったら再描画する (`dashboard/src/App.tsx` の `POLL_MS`)。運営が当日 JSON を編集すると数秒で画面に反映され、リロード不要。ヘッダー右上の **LIVE インジケータ**が更新中を示し、ポーリングが失敗しても前回の表示を保持する (画面を消さない)。
+
+## ヒント (ポイント消費で開示)
+
+インジェクトに `hints` (段階ヒント) を持たせると、参加者がダッシュボード上で**ポイントを消費して**開示できる。開示すると `cost` が獲得スコアから引かれ、**実効スコア = 素点 − 開示済み cost 合計**がタイル・スコアセルに反映される。開示状態はブラウザ localStorage に保持 (リロードしても残る)。scenarios の「段階ヒント」をポイント制にしたもの。追加はスキーマ ([references/data-schema.md](references/data-schema.md)) の `hints[]` 参照。
 
 ## 起動・ビルド
 

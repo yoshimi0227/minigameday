@@ -53,8 +53,33 @@ body {
 
 .page { max-width: 1080px; margin: 0 auto; padding: 24px 20px 48px; }
 
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .page-header h1 { margin: 0; font-size: 22px; font-weight: 650; }
 .event-meta { margin: 2px 0 0; color: var(--text-secondary); }
+
+/* --- LIVE インジケータ (リアルタイム反映中の表示) --- */
+.live { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--status-good);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.live-badge .live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--status-good);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+.live-badge.stale { color: var(--status-critical); }
+.live-badge.stale .live-dot { background: var(--status-critical); animation: none; }
+.live-time { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .live-badge .live-dot { animation: none; } }
 
 /* --- フィルター行 (チャートの上に 1 行、以降の全てをスコープする) --- */
 .filter-row {
@@ -94,6 +119,7 @@ body {
 .tile-value .unit { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
 .tile.hero .tile-value { font-size: 48px; }
 .tile.hero .tile-value .unit { font-size: 16px; }
+.tile-delta { margin-top: 4px; font-size: 12px; color: var(--status-warning); }
 
 /* --- カード --- */
 .card {
@@ -138,6 +164,41 @@ td.time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--
 .inject-detail dl { margin: 8px 0 0; font-size: 13px; }
 .inject-detail dt { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
 .inject-detail dd { margin: 0; color: var(--text-secondary); }
+
+/* --- 段階ヒント (ポイント消費で開示) --- */
+.hints { margin-top: 8px; }
+.hints-head { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.hints-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hint-reveal {
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px dashed var(--baseline);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.hint-reveal:hover { border-color: var(--series-1); }
+.hint-reveal .hint-lock { filter: grayscale(0.2); }
+.hint-cost { color: var(--status-warning); font-variant-numeric: tabular-nums; }
+.hint.open .hint-body {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--series-1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--surface-1);
+}
+.hint-line { display: flex; align-items: baseline; gap: 8px; }
+.hint-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.hint-cost.spent { color: var(--text-muted); font-size: 11px; }
+.hint-text { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
+
+.score-penalty { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
 
 /* 結果チップ: アイコン + ラベル (色だけに意味を持たせない) */
 .chip {

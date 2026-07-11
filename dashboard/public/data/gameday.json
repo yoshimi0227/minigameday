@@ -18,7 +18,12 @@
       "recoveryMinutes": 1,
       "score": 93,
       "maxScore": 100,
-      "notes": "検知 38/40 (ECS イベント+canary で即確認)、対応 40/40 (影響なしの静観が正解)、伝達 15/20 (記録は自動、宣言は形式のみ)。回復は約 30 秒で仮説 (数分) より速い。"
+      "notes": "検知 38/40 (ECS イベント+canary で即確認)、対応 40/40 (影響なしの静観が正解)、伝達 15/20 (記録は自動、宣言は形式のみ)。回復は約 30 秒で仮説 (数分) より速い。",
+      "hints": [
+        { "id": "h1-1", "label": "方針", "cost": 5, "text": "まず canary の成功率を見る。緑のままならユーザー影響なし = 静観でよい。慌てて手を動かさない。" },
+        { "id": "h1-2", "label": "使う道具", "cost": 10, "text": "ECS のサービスイベントでタスクの停止・起動・登録が時刻付きで追える。CloudTrail で『誰が』止めたかも分かる。" },
+        { "id": "h1-3", "label": "具体手順", "cost": 20, "text": "aws ecs describe-services で desiredCount/runningCount を確認。2→1→2 なら自己回復済み。desiredCount を手で上げると drift が残るので触らない。" }
+      ]
     },
     {
       "id": "inject-2",
@@ -32,7 +37,11 @@
       "recoveryMinutes": 1,
       "score": 80,
       "maxScore": 100,
-      "notes": "検知 25/40 (canary では検知不能 — SELECT 1 読み取りプローブの限界が露呈。RDS イベントで裏取り)、対応 40/40 (影響なしの検証と切替確認)、伝達 15/20。仮説『503 が出る』は外れ = 最大の学び。"
+      "notes": "検知 25/40 (canary では検知不能 — SELECT 1 読み取りプローブの限界が露呈。RDS イベントで裏取り)、対応 40/40 (影響なしの検証と切替確認)、伝達 15/20。仮説『503 が出る』は外れ = 最大の学び。",
+      "hints": [
+        { "id": "h2-1", "label": "方針", "cost": 5, "text": "canary が緑でも『書き込み』が復旧したとは限らない。読み取りプローブ (SELECT 1) の死角を疑う。" },
+        { "id": "h2-2", "label": "使う道具", "cost": 10, "text": "RDS のイベント (describe-events) でフェイルオーバーの開始・完了時刻が分かる。ライター切替は describe-db-clusters の IsWriter で確認。" }
+      ]
     }
   ],
   "feedback": [

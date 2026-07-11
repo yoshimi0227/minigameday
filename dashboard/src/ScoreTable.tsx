@@ -1,5 +1,6 @@
 import type { Inject, InjectStatus } from './types';
-import { fmtMinutes } from './types';
+import { effectiveScore, fmtMinutes, hintPenalty } from './types';
+import Hints from './Hints';
 
 const STATUS: Record<InjectStatus, { label: string; icon: string; color: string }> = {
   success: { label: '成功', icon: '✓', color: 'var(--status-good)' },
@@ -22,7 +23,36 @@ function Minutes({ value }: { value?: number }) {
   return <>{typeof value === 'number' ? `${fmtMinutes(value)} 分` : '—'}</>;
 }
 
-export default function ScoreTable({ injects }: { injects: Inject[] }) {
+function ScoreCell({ inject, revealed }: { inject: Inject; revealed: ReadonlySet<string> }) {
+  if (typeof inject.score !== 'number' || !inject.maxScore) {
+    return <span className="score-max">未採点</span>;
+  }
+  const penalty = hintPenalty(inject, revealed);
+  const eff = effectiveScore(inject, revealed) ?? inject.score;
+  const pct = Math.max(0, Math.min(100, (eff / inject.maxScore) * 100));
+  return (
+    <>
+      <div>
+        <span className="score-num">{eff}</span>
+        <span className="score-max">{` / ${inject.maxScore}`}</span>
+        {penalty > 0 && <span className="score-penalty">{`（${inject.score} − ${penalty}pt）`}</span>}
+      </div>
+      <div className="meter">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+    </>
+  );
+}
+
+export default function ScoreTable({
+  injects,
+  revealed,
+  onReveal,
+}: {
+  injects: Inject[];
+  revealed: ReadonlySet<string>;
+  onReveal: (id: string) => void;
+}) {
   return (
     <div className="table-wrap">
       <table>
@@ -69,24 +99,13 @@ export default function ScoreTable({ injects }: { injects: Inject[] }) {
                       </dl>
                     </details>
                   )}
+                  <Hints inject={inject} revealed={revealed} onReveal={onReveal} />
                 </td>
                 <td><StatusChip status={inject.status} /></td>
                 <td className="num"><Minutes value={inject.detectionMinutes} /></td>
                 <td className="num"><Minutes value={inject.recoveryMinutes} /></td>
                 <td className="score-cell">
-                  {typeof inject.score === 'number' && inject.maxScore ? (
-                    <>
-                      <div>
-                        <span className="score-num">{inject.score}</span>
-                        <span className="score-max">{` / ${inject.maxScore}`}</span>
-                      </div>
-                      <div className="meter">
-                        <span style={{ width: `${Math.max(0, Math.min(100, (inject.score / inject.maxScore) * 100))}%` }} />
-                      </div>
-                    </>
-                  ) : (
-                    <span className="score-max">未採点</span>
-                  )}
+                  <ScoreCell inject={inject} revealed={revealed} />
                 </td>
               </tr>
             );

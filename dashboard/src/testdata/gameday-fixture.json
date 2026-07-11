@@ -18,7 +18,11 @@
       "recoveryMinutes": 6,
       "score": 90,
       "maxScore": 100,
-      "notes": "影響なしの判断が速かった。静観の判断基準 (canary 成功率) をチームで言語化できた。"
+      "notes": "影響なしの判断が速かった。静観の判断基準 (canary 成功率) をチームで言語化できた。",
+      "hints": [
+        { "id": "h1-1", "label": "方針", "cost": 5, "text": "まず canary の成功率を見る。" },
+        { "id": "h1-2", "label": "具体手順", "cost": 20, "text": "ECS のサービスイベントを確認する。" }
+      ]
     },
     {
       "id": "inject-2",
