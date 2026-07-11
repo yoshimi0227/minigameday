@@ -5,10 +5,10 @@ import * as fis from 'aws-cdk-lib/aws-fis';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as rds from 'aws-cdk-lib/aws-rds';
 
-export interface FisStackProps extends cdk.StackProps {
+export interface FaultInjectionProps {
   /** 実験の停止条件に使う CloudWatch アラーム */
   readonly stopAlarm: cloudwatch.IAlarm;
-  /** FIS が対象タスクを選ぶタグのキー/値 (AppStack と一致させる) */
+  /** FIS が対象タスクを選ぶタグのキー/値 (TargetApp と一致させる) */
   readonly targetTagKey: string;
   readonly targetTagValue: string;
   /** フェイルオーバー対象の Aurora クラスター */
@@ -20,12 +20,9 @@ export interface FisStackProps extends cdk.StackProps {
  * - シナリオ1: Fargate タスクを 1 つ停止 (アプリ層の冗長性)
  * - シナリオ2: Aurora をフェイルオーバー (データ層の回復)
  */
-export class FisStack extends cdk.Stack {
-  public readonly stopTaskTemplate: fis.CfnExperimentTemplate;
-  public readonly failoverDbTemplate: fis.CfnExperimentTemplate;
-
-  constructor(scope: Construct, id: string, props: FisStackProps) {
-    super(scope, id, props);
+export class FaultInjection extends Construct {
+  constructor(scope: Construct, id: string, props: FaultInjectionProps) {
+    super(scope, id);
 
     const { stopAlarm, targetTagKey, targetTagValue, databaseCluster } = props;
 
@@ -48,7 +45,7 @@ export class FisStack extends cdk.Stack {
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
 
-    this.stopTaskTemplate = new fis.CfnExperimentTemplate(this, 'StopOneTask', {
+    const stopTaskTemplate = new fis.CfnExperimentTemplate(this, 'StopOneTask', {
       description: 'GameDay: Fargate タスクを 1 つ停止し、冗長性と回復を観察する',
       roleArn: ecsRole.roleArn,
       stopConditions: [stopCondition],
@@ -83,7 +80,7 @@ export class FisStack extends cdk.Stack {
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
 
-    this.failoverDbTemplate = new fis.CfnExperimentTemplate(this, 'FailoverDb', {
+    const failoverDbTemplate = new fis.CfnExperimentTemplate(this, 'FailoverDb', {
       description: 'GameDay: Aurora をフェイルオーバーし、書き込み先切替時の挙動を観察する',
       roleArn: rdsRole.roleArn,
       stopConditions: [stopCondition],
@@ -106,11 +103,11 @@ export class FisStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'StopTaskTemplateId', {
-      value: this.stopTaskTemplate.attrId,
+      value: stopTaskTemplate.attrId,
       description: 'シナリオ1: aws fis start-experiment --experiment-template-id <これ>',
     });
     new cdk.CfnOutput(this, 'FailoverDbTemplateId', {
-      value: this.failoverDbTemplate.attrId,
+      value: failoverDbTemplate.attrId,
       description: 'シナリオ2: aws fis start-experiment --experiment-template-id <これ>',
     });
   }

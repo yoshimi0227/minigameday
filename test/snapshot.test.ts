@@ -1,9 +1,7 @@
 import { test, expect } from 'vitest';
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { AppStack } from '../lib/app-stack';
-import { ObservabilityStack } from '../lib/observability-stack';
-import { FisStack } from '../lib/fis-stack';
+import { GamedayStack } from '../lib/gameday-stack';
 import { LegacyAppStack } from '../lib/legacy-app-stack';
 
 /**
@@ -20,24 +18,10 @@ function maskedTemplate(stack: cdk.Stack): unknown {
   return JSON.parse(json.replace(/[a-f0-9]{64}/g, '[ASSET_HASH]'));
 }
 
-test('snapshot: 本流 3 スタック (App / Observability / Fis)', () => {
+test('snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り返り + 障害注入)', () => {
   const app = new cdk.App();
-  const appStack = new AppStack(app, 'App');
-  const observability = new ObservabilityStack(app, 'Obs', {
-    loadBalancer: appStack.loadBalancer,
-    targetGroup: appStack.targetGroup,
-    databaseCluster: appStack.databaseCluster,
-  });
-  new FisStack(app, 'Fis', {
-    stopAlarm: observability.stopAlarm,
-    targetTagKey: appStack.targetTagKey,
-    targetTagValue: appStack.targetTagValue,
-    databaseCluster: appStack.databaseCluster,
-  });
-
-  expect(maskedTemplate(appStack)).toMatchSnapshot('App');
-  expect(maskedTemplate(observability)).toMatchSnapshot('Observability');
-  expect(maskedTemplate(app.node.findChild('Fis') as cdk.Stack)).toMatchSnapshot('Fis');
+  const stack = new GamedayStack(app, 'GameDay');
+  expect(maskedTemplate(stack)).toMatchSnapshot('GameDay');
 });
 
 test('snapshot: scenario-03 出発点スタック (LegacyApp)', () => {

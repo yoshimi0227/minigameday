@@ -1,11 +1,11 @@
 ---
 name: fis-experiment
-description: GameDay シナリオを AWS FIS 実験テンプレート (CDK) として実装する。「シナリオを FIS にして」「実験テンプレートを作って」「障害注入を実装して」「fis-stack を書いて/直して」など、FIS 実験の実装・修正・レビューの全てで必ず使う。FIS アクションの選定、停止条件 (CloudWatch アラーム)、実験ロールの最小権限 IAM、爆発半径の制御 (selectionMode)、実験レポート設定、ECS タスクアクションの SSM サイドカー前提条件など、検証済みの判断基準とコード例を提供する。lib/fis-stack.ts を編集するときは内容にかかわらず該当する。
+description: GameDay シナリオを AWS FIS 実験テンプレート (CDK) として実装する。「シナリオを FIS にして」「実験テンプレートを作って」「障害注入を実装して」「fault-injection を書いて/直して」など、FIS 実験の実装・修正・レビューの全てで必ず使う。FIS アクションの選定、停止条件 (CloudWatch アラーム)、実験ロールの最小権限 IAM、爆発半径の制御 (selectionMode)、実験レポート設定、ECS タスクアクションの SSM サイドカー前提条件など、検証済みの判断基準とコード例を提供する。lib/constructs/fault-injection.ts を編集するときは内容にかかわらず該当する。
 ---
 
 # FIS 実験テンプレート実装 (シナリオ → CDK)
 
-GameDay シナリオを AWS FIS 実験テンプレートとして `lib/fis-stack.ts` に落とすスキル。
+GameDay シナリオを AWS FIS 実験テンプレートとして `lib/constructs/fault-injection.ts` に落とすスキル。
 目的は「安全に失敗できる」実験だけをデプロイさせること。停止条件のない実験や爆発半径の不明な実験は GameDay ではなくただの障害になる。デプロイ前に必ず下の安全装置チェックリストを通す。
 
 ## 実装フロー

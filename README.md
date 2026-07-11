@@ -5,11 +5,15 @@ ALB + Fargate の Web アプリに FIS で障害を注入し、CloudWatch Synthe
 
 ## スタック構成
 
-| スタック | 役割 |
+本体は **`GameDay` 1 スタック**。3 本柱は `lib/constructs/` 配下の Construct で分離する(cross-stack Strong Reference を避けるため。詳細は CLAUDE.md)。
+
+| スタック / Construct | 役割 |
 |---|---|
-| `GameDay-App` | お題の対象アプリ(3層)。ALB + Fargate(DB に ping する Node アプリ ×2)+ Aurora MySQL Serverless v2。`/healthz`=生存、`/`=DB 疎通(200/503) |
-| `GameDay-Observability` | 振り返り。Synthetics canary(Playwright)、5xx 停止条件アラーム、ダッシュボード `gameday-review`(ALB/Target/Aurora 指標) |
-| `GameDay-Fis` | 障害注入。FIS 実験テンプレート2種(①Fargate タスク停止 / ②Aurora フェイルオーバー) |
+| `GameDay` スタック | 下記 3 Construct を束ねる本体スタック |
+| └ `TargetApp` | お題の対象アプリ(3層)。ALB + Fargate(DB に ping する Node アプリ ×2)+ Aurora MySQL Serverless v2。`/healthz`=生存、`/`=DB 疎通(200/503) |
+| └ `Observability` | 振り返り。Synthetics canary(Playwright)、5xx 停止条件アラーム、ダッシュボード `gameday-review`(ALB/Target/Aurora 指標) |
+| └ `FaultInjection` | 障害注入。FIS 実験テンプレート2種(①Fargate タスク停止 / ②Aurora フェイルオーバー) |
+| `GameDay-Legacy` スタック | scenario-03 用の SPOF 出発点(単一 EC2)。deploy ライフサイクルが異なるので独立。必要な回だけデプロイ |
 
 ## セットアップ
 
@@ -26,23 +30,23 @@ npx cdk bootstrap        # 初回のみ (アカウント/リージョンごと)
 ```bash
 # 1. デプロイ
 npm run deploy                 # cdk deploy --all
-#    出力の GameDay-App.AlbUrl をブラウザで開いて正常を確認
+#    出力の GameDay.TargetAppAlbUrl をブラウザで開いて正常を確認
 
 # (別ターミナル) 当日ダッシュボード — スコア表 / 検知・復旧チャート / KPT を表示。
 #    dashboard/public/data/gameday.json の編集で画面に即時反映される
 npm run dashboard
 
 # 2. 障害注入 (デプロイ出力のテンプレート ID を使う)
-#    シナリオ1: Fargate タスクを1つ停止 (StopTaskTemplateId)
+#    シナリオ1: Fargate タスクを1つ停止 (出力 GameDay.FaultInjectionStopTaskTemplateId)
 aws fis start-experiment --experiment-template-id <StopTaskTemplateId>
-#    シナリオ2: Aurora をフェイルオーバー (FailoverDbTemplateId)
+#    シナリオ2: Aurora をフェイルオーバー (出力 GameDay.FaultInjectionFailoverDbTemplateId)
 aws fis start-experiment --experiment-template-id <FailoverDbTemplateId>
 
 # 3. 振り返り
 #    - CloudWatch ダッシュボード "gameday-review" で canary 成功率 / 5xx / Healthy Host を確認
 #    - 構成のドリフトを検出
 npm run drift                  # cdk drift
-aws cloudformation detect-stack-drift --stack-name GameDay-App
+aws cloudformation detect-stack-drift --stack-name GameDay
 
 # 4. 片付け (課金停止)
 npm run destroy                # cdk destroy --all

@@ -50,7 +50,7 @@ difficulty: advanced
 |---|---|
 | アクション | `aws:network:disrupt-connectivity` |
 | パラメータ | `scope: all`、`duration: PT60M` (= 制限時間。後述) |
-| ターゲット | `aws:ec2:subnet`、`selectionMode: ALL`、**GameDay AppStack の VPC に限定** (VPC ID フィルタ、またはサブネットへの `GameDayTarget=true` タグ) |
+| ターゲット | `aws:ec2:subnet`、`selectionMode: ALL`、**GameDay 本体スタック (TargetApp) の VPC に限定** (VPC ID フィルタ、またはサブネットへの `GameDayTarget=true` タグ) |
 | 爆発半径 | **東京の GameDay VPC の全サブネット (2 AZ × public/app/data = 6 つ) のみ**。仕組みはクローン NACL (`managedByFIS=true` タグ付き) の一時付け替えで、実験終了時に FIS が自動復元する。他 VPC・他リージョン・AWS コントロールプレーンには波及しない |
 
 `duration` を制限時間と同じ **60 分固定**にする理由:

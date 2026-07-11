@@ -11,9 +11,13 @@ import * as rds from 'aws-cdk-lib/aws-rds';
  * - Web/LB 層: ALB
  * - アプリ層 : Fargate (httpd)
  * - データ層 : Aurora MySQL Serverless v2 (隔離サブネット)
- * FIS はこのスタックのタスク/DB に障害を注入する。
+ * FIS はこのタスク/DB に障害を注入する。
+ *
+ * かつては独立スタック (AppStack) だったが、cross-stack Strong Reference を避けるため
+ * GamedayStack 配下の Construct に統合した (aws-cdk-development スキル 鉄則1・2)。
+ * 公開プロパティは同一スタック内の他 Construct が参照する (Export/ImportValue は生じない)。
  */
-export class AppStack extends cdk.Stack {
+export class TargetApp extends Construct {
   // 公開プロパティはインターフェース型で公開する (awscdk/no-construct-in-public-property-of-construct)
   public readonly cluster: ecs.ICluster;
   public readonly service: ecs.IFargateService;
@@ -25,8 +29,8 @@ export class AppStack extends cdk.Stack {
   public readonly targetTagKey = 'GameDayTarget';
   public readonly targetTagValue = 'true';
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
 
     // 3層に対応するサブネット: public(ALB) / app(Fargate) / data(Aurora)
     const vpc = new ec2.Vpc(this, 'Vpc', {
@@ -74,7 +78,7 @@ export class AppStack extends cdk.Stack {
     taskDefinition.addContainer('app', {
       // app/ の Node アプリを Docker ビルド (deploy 時に Docker が必要)。
       // "/" で Aurora に SELECT 1 し、可否で 200/503 を返す。
-      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'app')),
+      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', '..', 'app')),
       portMappings: [{ containerPort: 80 }],
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'gameday-app' }),
       // データ層への接続情報をアプリ層へ受け渡し

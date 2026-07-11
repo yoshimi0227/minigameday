@@ -17,11 +17,11 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 /**
  * scenario-03 (単一 EC2 の突然死 → ECS への作り替えで復旧) の出発点スタック。
  *
- * これは「学習用にあえて壊れやすくした」構成。本流の GameDay-App (Fargate 冗長) とは別物で、
+ * これは「学習用にあえて壊れやすくした」構成。本体の GamedayStack (Fargate 冗長) とは別物で、
  * 単一 EC2 (Auto Scaling なし = SPOF) でアプリを動かす。FIS でこの EC2 を terminate し、
  * 参加者が同じコンテナイメージを ECS (Fargate) サービスとして手で組み直して復旧させる。
  *
- * 自己完結: このスタック単体で deploy / destroy できる (本流 3 スタックに依存しない)。
+ * 自己完結: このスタック単体で deploy / destroy できる (本体スタックに依存しない)。
  * 復旧材料 (ECR イメージ / ECS クラスタ / タスク実行ロール / ロググループ / 共有 SG) も
  * 同梱し、参加者はコンソール/CLI からこれらを組み合わせるだけで復旧できる。
  */

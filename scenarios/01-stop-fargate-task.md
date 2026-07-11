@@ -19,7 +19,7 @@ canary `gameday-top` 成功率 100%、ALB 5xx = 0、ECS RunningTaskCount = 2。
 
 ## 注入する障害
 
-`aws:ecs:stop-task` — `GameDayTarget=true` タグのタスクから `COUNT(1)` で 1 つ停止。爆発半径はタスク 1 個 (実装: `GameDay-Fis` の `gameday-stop-one-task`)。
+`aws:ecs:stop-task` — `GameDayTarget=true` タグのタスクから `COUNT(1)` で 1 つ停止。爆発半径はタスク 1 個 (実装: 本体スタックの FaultInjection Construct、実験名 `gameday-stop-one-task`)。
 
 ## 前提インフラ
 
