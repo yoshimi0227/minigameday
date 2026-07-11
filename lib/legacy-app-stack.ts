@@ -67,7 +67,7 @@ export class LegacyAppStack extends cdk.Stack {
       vpc,
       description: 'gameday-legacy app (shared by EC2 SPOF and rebuilt Fargate service)',
     });
-    database.connections.allowDefaultPortFrom(appSecurityGroup, 'app -> Aurora');
+    database.connections.allowDefaultPortFrom(appSecurityGroup, 'app to Aurora');
 
     // --- 出発点の単一 EC2 (SPOF): user data で Docker により app イメージを起動 ---
     const instance = new ec2.Instance(this, 'LegacyServer', {
@@ -130,7 +130,7 @@ export class LegacyAppStack extends cdk.Stack {
       defaultTargetGroups: [targetGroup],
     });
     // ALB -> app:80 を許可
-    appSecurityGroup.connections.allowFrom(loadBalancer, ec2.Port.tcp(80), 'ALB -> app');
+    appSecurityGroup.connections.allowFrom(loadBalancer, ec2.Port.tcp(80), 'ALB to app');
 
     // --- 復旧材料 (参加者が組み合わせる。事前に存在しないと制限時間内に終わらない) ---
     const rebuildCluster = new ecs.Cluster(this, 'RebuildCluster', {
@@ -272,7 +272,8 @@ export class LegacyAppStack extends cdk.Stack {
           },
         },
         dataSources: {
-          cloudWatchDashboards: [{ dashboardIdentifier: dashboard.dashboardName }],
+          // FIS はダッシュボード名ではなく ARN を要求する
+          cloudWatchDashboards: [{ dashboardIdentifier: dashboard.dashboardArn }],
         },
         preExperimentDuration: 'PT10M',
         postExperimentDuration: 'PT75M',

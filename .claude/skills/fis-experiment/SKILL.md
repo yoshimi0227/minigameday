@@ -74,7 +74,8 @@ new fis.CfnExperimentTemplate(this, 'StopTaskExperiment', {
       },
     },
     dataSources: {
-      cloudWatchDashboards: [{ dashboardIdentifier: dashboard.dashboardName }],
+      // dashboardIdentifier は名前でなく ARN (dashboard.dashboardArn)。名前を渡すと deploy 時に InvalidRequest
+      cloudWatchDashboards: [{ dashboardIdentifier: dashboard.dashboardArn }],
     },
     preExperimentDuration: 'PT10M',
     postExperimentDuration: 'PT10M',
