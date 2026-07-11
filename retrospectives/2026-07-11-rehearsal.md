@@ -3,7 +3,7 @@
 - 実施日時: 2026-07-11 15:50 – (JST)
 - シナリオ: リハーサル (タスク停止 / Aurora フェイルオーバーの 2 本)
 - 実験テンプレート ID: stop-task=`EXT4CefKarE8Viek` / failover=`EXT6oWLHq6MnLLdAY`
-- 実験 ID: (実行後に転記)
+- 実験 ID: stop-task=`EXPLtguw23gC7TaXP8` / failover=`EXP7hkWi4qi2Cy5iC2`
 - 参加者: maehara (solo リハーサル)
 
 ## 仮説
