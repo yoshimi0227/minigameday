@@ -9,10 +9,15 @@ import { suppressGamedayLabFindings } from '../lib/nag-suppressions';
 
 const app = new cdk.App();
 
-// env は固定しない (environment-agnostic)。
-// deploy 時は `cdk` CLI の現在のアカウント/リージョンが使われ、VPC の AZ は
-// Fn::GetAZs で解決されるため、合成時に ec2:DescribeAvailabilityZones を必要としない。
-// 特定アカウントに固定したい場合は各スタックに env: { account, region } を渡す。
+// env は固定しない (environment-agnostic)。誰でも自分のアカウントに `cdk deploy`
+// できる可搬性を優先した意図的な選択。deploy 時は `cdk` CLI の現在のアカウント/
+// リージョンが使われ、VPC の AZ は Fn::GetAZs で解決されるため、合成時に
+// ec2:DescribeAvailabilityZones を必要としない。特定アカウントに固定したい場合は
+// 各スタックに env: { account, region } を渡す。
+//
+// パラメータ管理 (parameter.ts + AppParameter 型) も、単一の使い捨てラボのため
+// 意図的に省いている。dev/stg/prd の複数環境やアカウント固定が必要になった時点で、
+// aws-cdk-development スキルの design-principles 6 節に沿って導入する。
 const prefix = 'GameDay';
 
 // 1) 対象アプリ: ALB + Fargate (お題)

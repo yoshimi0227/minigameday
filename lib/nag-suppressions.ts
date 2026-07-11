@@ -15,7 +15,10 @@ export function suppressGamedayLabFindings(stack: Stack): void {
     {
       id: 'AwsSolutions-IAM4',
       reason:
-        '学習ラボ: AWS マネージドポリシー (ECSTaskExecution / FIS アクセス / SSMManagedInstanceCore) を利用。最小権限へのインライン化は本番転用時の宿題',
+        '学習ラボ: 用途特化の AWS マネージドポリシー (ECSTaskExecution / FIS アクセス / SSMManagedInstanceCore) のみ許可。最小権限へのインライン化は本番転用時の宿題',
+      // FullAccess / Administrator 系だけは抑制しない = 将来混入したら synth:nag で落とす
+      // (testing.md 推奨。IAM4 の appliesTo は Policy 名文字列にマッチする)
+      appliesTo: [{ regex: '/^(?!.*(FullAccess|Administrator)).+$/' }],
     },
     {
       id: 'AwsSolutions-IAM5',

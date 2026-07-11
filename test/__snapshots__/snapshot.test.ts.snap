@@ -1,0 +1,3997 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`] = `
+{
+  "Outputs": {
+    "AlbUrl": {
+      "Description": "対象アプリ URL (canary の監視先)",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "Alb16C2F182",
+                "DNSName",
+              ],
+            },
+          ],
+        ],
+      },
+    },
+    "AppSecurityGroupId": {
+      "Description": "app 用 SG (Fargate サービスに流用して DB 到達)",
+      "Value": {
+        "Fn::GetAtt": [
+          "AppSg898BCA4E",
+          "GroupId",
+        ],
+      },
+    },
+    "AppSubnetIds": {
+      "Description": "Fargate を置く app サブネット",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            {
+              "Ref": "VpcappSubnet1SubnetAE489B2F",
+            },
+            ",",
+            {
+              "Ref": "VpcappSubnet2Subnet2449FB56",
+            },
+          ],
+        ],
+      },
+    },
+    "ExperimentTemplateId": {
+      "Description": "aws fis start-experiment --experiment-template-id <これ>",
+      "Value": {
+        "Fn::GetAtt": [
+          "TerminateEc2Experiment",
+          "Id",
+        ],
+      },
+    },
+    "RebuildClusterName": {
+      "Description": "ECS クラスタ (復旧先)",
+      "Value": {
+        "Ref": "RebuildCluster2B14C149",
+      },
+    },
+    "RebuildDbHost": {
+      "Description": "DB_HOST",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseB269D8BB",
+          "Endpoint.Address",
+        ],
+      },
+    },
+    "RebuildDbSecretArn": {
+      "Description": "DB_SECRET (Secrets Manager ARN)",
+      "Value": {
+        "Ref": "DatabaseSecretAttachmentE5D1B020",
+      },
+    },
+    "RebuildImageUri": {
+      "Description": "復旧タスク定義に使うコンテナイメージ URI",
+      "Value": {
+        "Fn::Sub": "\${AWS::AccountId}.dkr.ecr.\${AWS::Region}.\${AWS::URLSuffix}/cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}:[ASSET_HASH]",
+      },
+    },
+    "RebuildLogGroup": {
+      "Description": "awslogs のロググループ",
+      "Value": {
+        "Ref": "RebuildLogsDC086F4A",
+      },
+    },
+    "RebuildTargetGroupArn": {
+      "Description": "既存の ip 型ターゲットグループ (Fargate を載せる先)",
+      "Value": {
+        "Ref": "AppTgBEDAABDD",
+      },
+    },
+    "RebuildTaskExecRoleArn": {
+      "Description": "タスク実行ロール ARN (iam:PassRole 対象)",
+      "Value": {
+        "Fn::GetAtt": [
+          "RebuildTaskExecRole53AE5A2E",
+          "Arn",
+        ],
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+    "SsmParameterValueawsserviceamiamazonlinuxlatestal2023amikernel61x8664C96584B6F00A464EAD1953AFF4B05118Parameter": {
+      "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+    },
+  },
+  "Resources": {
+    "AbortAlarm0223496C": {
+      "Properties": {
+        "AlarmDescription": "運営用 kill switch: put-metric-data GameDay/Abort=1 で実験を止める",
+        "AlarmName": "gameday-legacy-abort",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "Abort",
+        "Namespace": "GameDay",
+        "Period": 60,
+        "Statistic": "Maximum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching",
+      },
+      "Type": "AWS::CloudWatch::Alarm",
+    },
+    "Alb16C2F182": {
+      "DependsOn": [
+        "VpcpublicSubnet1DefaultRouteB88F9E93",
+        "VpcpublicSubnet1RouteTableAssociation4E83B6E4",
+        "VpcpublicSubnet2DefaultRoute732F0BEB",
+        "VpcpublicSubnet2RouteTableAssociationCCE257FF",
+      ],
+      "Properties": {
+        "LoadBalancerAttributes": [
+          {
+            "Key": "deletion_protection.enabled",
+            "Value": "false",
+          },
+        ],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "AlbSecurityGroup580F65A6",
+              "GroupId",
+            ],
+          },
+        ],
+        "Subnets": [
+          {
+            "Ref": "VpcpublicSubnet1Subnet2BB74ED7",
+          },
+          {
+            "Ref": "VpcpublicSubnet2SubnetE34B022A",
+          },
+        ],
+        "Type": "application",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    },
+    "AlbHttp7966E42E": {
+      "Properties": {
+        "DefaultActions": [
+          {
+            "TargetGroupArn": {
+              "Ref": "AppTgBEDAABDD",
+            },
+            "Type": "forward",
+          },
+        ],
+        "LoadBalancerArn": {
+          "Ref": "Alb16C2F182",
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+    },
+    "AlbSecurityGroup580F65A6": {
+      "Properties": {
+        "GroupDescription": "Automatically created Security Group for ELB LegacyAlb93E45070",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow from anyone on port 80",
+            "FromPort": 80,
+            "IpProtocol": "tcp",
+            "ToPort": 80,
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "AlbSecurityGrouptoLegacyAppSg4931BA7680F8F777D0": {
+      "Properties": {
+        "Description": "ALB to app",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "AppSg898BCA4E",
+            "GroupId",
+          ],
+        },
+        "FromPort": 80,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "AlbSecurityGroup580F65A6",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "ToPort": 80,
+      },
+      "Type": "AWS::EC2::SecurityGroupEgress",
+    },
+    "AppSg898BCA4E": {
+      "Properties": {
+        "GroupDescription": "gameday-legacy app (shared by EC2 SPOF and rebuilt Fargate service)",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "AppSgfromLegacyAlbSecurityGroupC060171380E613AAF6": {
+      "Properties": {
+        "Description": "ALB to app",
+        "FromPort": 80,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "AppSg898BCA4E",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "AlbSecurityGroup580F65A6",
+            "GroupId",
+          ],
+        },
+        "ToPort": 80,
+      },
+      "Type": "AWS::EC2::SecurityGroupIngress",
+    },
+    "AppTgBEDAABDD": {
+      "Properties": {
+        "HealthCheckIntervalSeconds": 15,
+        "HealthCheckPath": "/healthz",
+        "HealthyThresholdCount": 2,
+        "Port": 80,
+        "Protocol": "HTTP",
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "10",
+          },
+          {
+            "Key": "stickiness.enabled",
+            "Value": "false",
+          },
+        ],
+        "TargetType": "ip",
+        "Targets": [
+          {
+            "Id": {
+              "Fn::GetAtt": [
+                "LegacyServer648CAC27",
+                "PrivateIp",
+              ],
+            },
+          },
+        ],
+        "UnhealthyThresholdCount": 2,
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "FisReportBucketFF54701A",
+              },
+              " S3 bucket.",
+            ],
+          ],
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "DatabaseB269D8BB": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "CopyTagsToSnapshot": true,
+        "DBClusterParameterGroupName": "default.aurora-mysql8.0",
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnets56F17B9A",
+        },
+        "DatabaseName": "gameday",
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.10.4",
+        "MasterUserPassword": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "LegacyDatabaseSecretEDEB0FD43fdaad7efa858a3daf9490cf0a702aeb",
+              },
+              ":SecretString:password::}}",
+            ],
+          ],
+        },
+        "MasterUsername": "admin",
+        "ServerlessV2ScalingConfiguration": {
+          "MaxCapacity": 1,
+          "MinCapacity": 0.5,
+        },
+        "StorageEncrypted": true,
+        "VpcSecurityGroupIds": [
+          {
+            "Fn::GetAtt": [
+              "DatabaseSecurityGroup5C91FDCB",
+              "GroupId",
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::RDS::DBCluster",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "DatabaseSecretAttachmentE5D1B020": {
+      "Properties": {
+        "SecretId": {
+          "Ref": "LegacyDatabaseSecretEDEB0FD43fdaad7efa858a3daf9490cf0a702aeb",
+        },
+        "TargetId": {
+          "Ref": "DatabaseB269D8BB",
+        },
+        "TargetType": "AWS::RDS::DBCluster",
+      },
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+    },
+    "DatabaseSecurityGroup5C91FDCB": {
+      "Properties": {
+        "GroupDescription": "RDS security group",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "DatabaseSecurityGroupfromLegacyAppSg4931BA76IndirectPort417FB4E7": {
+      "Properties": {
+        "Description": "app to Aurora",
+        "FromPort": {
+          "Fn::GetAtt": [
+            "DatabaseB269D8BB",
+            "Endpoint.Port",
+          ],
+        },
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup5C91FDCB",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "AppSg898BCA4E",
+            "GroupId",
+          ],
+        },
+        "ToPort": {
+          "Fn::GetAtt": [
+            "DatabaseB269D8BB",
+            "Endpoint.Port",
+          ],
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroupIngress",
+    },
+    "DatabaseSubnets56F17B9A": {
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnets for Database database",
+        "SubnetIds": [
+          {
+            "Ref": "VpcdataSubnet1SubnetE2B009FB",
+          },
+          {
+            "Ref": "VpcdataSubnet2SubnetAD08DFFF",
+          },
+        ],
+      },
+      "Type": "AWS::RDS::DBSubnetGroup",
+    },
+    "Databasewriter2462CC03": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "VpcdataSubnet1RouteTableAssociation9E9FDBBB",
+        "VpcdataSubnet2RouteTableAssociation6C8F2058",
+      ],
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Ref": "DatabaseB269D8BB",
+        },
+        "DBInstanceClass": "db.serverless",
+        "Engine": "aurora-mysql",
+        "PromotionTier": 0,
+        "PubliclyAccessible": false,
+      },
+      "Type": "AWS::RDS::DBInstance",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "FisReportBucketAutoDeleteObjectsCustomResource168D4C0D": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "FisReportBucketPolicy78CDBFB3",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "FisReportBucketFF54701A",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "FisReportBucketFF54701A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": {
+          "Fn::Join": [
+            "",
+            [
+              "gameday-legacy-fis-reports-",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              "-",
+              {
+                "Ref": "AWS::Region",
+              },
+            ],
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "FisReportBucketPolicy78CDBFB3": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "FisReportBucketFF54701A",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FisReportBucketFF54701A",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FisReportBucketFF54701A",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FisReportBucketFF54701A",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FisReportBucketFF54701A",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "FisRoleDefaultPolicy050738F5": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "ec2:TerminateInstances",
+              "Condition": {
+                "StringEquals": {
+                  "ec2:ResourceTag/GameDayScenario": "03",
+                },
+              },
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "ec2:DescribeInstances",
+                "cloudwatch:DescribeAlarms",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FisReportBucketFF54701A",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FisReportBucketFF54701A",
+                          "Arn",
+                        ],
+                      },
+                      "/scenario-03/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "cloudwatch:GetMetricWidgetImage",
+                "cloudwatch:GetDashboard",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FisRoleDefaultPolicy050738F5",
+        "Roles": [
+          {
+            "Ref": "FisRoleF2C479C1",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "FisRoleF2C479C1": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "fis.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "GameDay scenario-03 FIS role (terminate single EC2)",
+        "RoleName": "gameday-legacy-fis-role",
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "LegacyCanary0B8FBE2A": {
+      "Properties": {
+        "ArtifactS3Location": {
+          "Fn::Join": [
+            "",
+            [
+              "s3://",
+              {
+                "Ref": "LegacyCanaryArtifactsBucketD279D40E",
+              },
+            ],
+          ],
+        },
+        "Code": {
+          "Handler": "index.handler",
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "LegacyCanaryServiceRole2CD47263",
+            "Arn",
+          ],
+        },
+        "Name": "gameday-legacy-top",
+        "RunConfig": {
+          "EnvironmentVariables": {
+            "URL": {
+              "Fn::Join": [
+                "",
+                [
+                  "http://",
+                  {
+                    "Fn::GetAtt": [
+                      "Alb16C2F182",
+                      "DNSName",
+                    ],
+                  },
+                ],
+              ],
+            },
+          },
+        },
+        "RuntimeVersion": "syn-nodejs-playwright-6.0",
+        "Schedule": {
+          "DurationInSeconds": "0",
+          "Expression": "rate(1 minute)",
+        },
+        "StartCanaryAfterCreation": true,
+      },
+      "Type": "AWS::Synthetics::Canary",
+    },
+    "LegacyCanaryArtifactsBucketD279D40E": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+              },
+            },
+          ],
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "LegacyCanaryArtifactsBucketPolicy15E50868": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "LegacyCanaryArtifactsBucketD279D40E",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "LegacyCanaryArtifactsBucketD279D40E",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "LegacyCanaryArtifactsBucketD279D40E",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "LegacyCanaryServiceRole2CD47263": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Policies": [
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "s3:ListAllMyBuckets",
+                  "Effect": "Allow",
+                  "Resource": "*",
+                },
+                {
+                  "Action": "s3:GetBucketLocation",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LegacyCanaryArtifactsBucketD279D40E",
+                      "Arn",
+                    ],
+                  },
+                },
+                {
+                  "Action": "s3:PutObject",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::GetAtt": [
+                            "LegacyCanaryArtifactsBucketD279D40E",
+                            "Arn",
+                          ],
+                        },
+                        "/*",
+                      ],
+                    ],
+                  },
+                },
+                {
+                  "Action": "cloudwatch:PutMetricData",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "CloudWatchSynthetics",
+                    },
+                  },
+                  "Effect": "Allow",
+                  "Resource": "*",
+                },
+                {
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup",
+                    "logs:PutLogEvents",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition",
+                        },
+                        ":logs:",
+                        {
+                          "Ref": "AWS::Region",
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId",
+                        },
+                        ":log-group:/aws/lambda/cwsyn-*",
+                      ],
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "canaryPolicy",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "LegacyDatabaseSecretEDEB0FD43fdaad7efa858a3daf9490cf0a702aeb": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Generated by the CDK for stack: ",
+              {
+                "Ref": "AWS::StackName",
+              },
+            ],
+          ],
+        },
+        "GenerateSecretString": {
+          "ExcludeCharacters": " %+~\`#$&*()|[]{}:;<>?!'/@"\\",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "SecretStringTemplate": "{"username":"admin"}",
+        },
+      },
+      "Type": "AWS::SecretsManager::Secret",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "LegacyServer648CAC27": {
+      "DependsOn": [
+        "LegacyServerInstanceRoleDefaultPolicyE111068F",
+        "LegacyServerInstanceRole8679AF5D",
+      ],
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "IamInstanceProfile": {
+          "Ref": "LegacyServerInstanceProfile15CB1271",
+        },
+        "ImageId": {
+          "Ref": "SsmParameterValueawsserviceamiamazonlinuxlatestal2023amikernel61x8664C96584B6F00A464EAD1953AFF4B05118Parameter",
+        },
+        "InstanceType": "t3.micro",
+        "SecurityGroupIds": [
+          {
+            "Fn::GetAtt": [
+              "AppSg898BCA4E",
+              "GroupId",
+            ],
+          },
+        ],
+        "SubnetId": {
+          "Ref": "VpcappSubnet1SubnetAE489B2F",
+        },
+        "Tags": [
+          {
+            "Key": "GameDayScenario",
+            "Value": "03",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/LegacyServer",
+          },
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash
+set -euo pipefail
+dnf install -y docker
+systemctl enable --now docker
+aws ecr get-login-password --region ",
+                {
+                  "Ref": "AWS::Region",
+                },
+                " | docker login --username AWS --password-stdin ",
+                {
+                  "Ref": "AWS::AccountId",
+                },
+                ".dkr.ecr.",
+                {
+                  "Ref": "AWS::Region",
+                },
+                ".amazonaws.com
+DB_SECRET=$(aws secretsmanager get-secret-value --region ",
+                {
+                  "Ref": "AWS::Region",
+                },
+                " --secret-id ",
+                {
+                  "Ref": "DatabaseSecretAttachmentE5D1B020",
+                },
+                " --query SecretString --output text)
+docker run -d --restart always -p 80:80 -e DB_HOST=",
+                {
+                  "Fn::GetAtt": [
+                    "DatabaseB269D8BB",
+                    "Endpoint.Address",
+                  ],
+                },
+                " -e DB_PORT=",
+                {
+                  "Fn::GetAtt": [
+                    "DatabaseB269D8BB",
+                    "Endpoint.Port",
+                  ],
+                },
+                " -e DB_NAME=gameday -e DB_SECRET="$DB_SECRET" ",
+                {
+                  "Fn::Sub": "\${AWS::AccountId}.dkr.ecr.\${AWS::Region}.\${AWS::URLSuffix}/cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}:[ASSET_HASH]",
+                },
+              ],
+            ],
+          },
+        },
+      },
+      "Type": "AWS::EC2::Instance",
+    },
+    "LegacyServerInstanceProfile15CB1271": {
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "LegacyServerInstanceRole8679AF5D",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::InstanceProfile",
+    },
+    "LegacyServerInstanceRole8679AF5D": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/AmazonSSMManagedInstanceCore",
+              ],
+            ],
+          },
+        ],
+        "Tags": [
+          {
+            "Key": "GameDayScenario",
+            "Value": "03",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/LegacyServer",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "LegacyServerInstanceRoleDefaultPolicyE111068F": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ecr:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":repository/",
+                    {
+                      "Fn::Sub": "cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}",
+                    },
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": "ecr:GetAuthorizationToken",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "DatabaseSecretAttachmentE5D1B020",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "LegacyServerInstanceRoleDefaultPolicyE111068F",
+        "Roles": [
+          {
+            "Ref": "LegacyServerInstanceRole8679AF5D",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "RebuildCluster2B14C149": {
+      "Properties": {
+        "ClusterName": "gameday-rebuild",
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled",
+          },
+        ],
+      },
+      "Type": "AWS::ECS::Cluster",
+    },
+    "RebuildLogsDC086F4A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/gameday/rebuild",
+        "RetentionInDays": 7,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "RebuildTaskExecRole53AE5A2E": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+              ],
+            ],
+          },
+        ],
+        "RoleName": "gameday-rebuild-task-exec",
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "RebuildTaskExecRoleDefaultPolicy779FB928": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "DatabaseSecretAttachmentE5D1B020",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "RebuildTaskExecRoleDefaultPolicy779FB928",
+        "Roles": [
+          {
+            "Ref": "RebuildTaskExecRole53AE5A2E",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "ReviewDashboard555E7E52": {
+      "Properties": {
+        "DashboardBody": {
+          "Fn::Join": [
+            "",
+            [
+              "{"widgets":[{"type":"metric","width":12,"height":6,"x":0,"y":0,"properties":{"view":"timeSeries","title":"Canary 成功率 (%) — 赤=障害中/復旧作業中, 緑=復旧","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["CloudWatchSynthetics","SuccessPercent","CanaryName","",
+              {
+                "Ref": "LegacyCanary0B8FBE2A",
+              },
+              "",{"period":60}]],"yAxis":{}}},{"type":"metric","width":12,"height":6,"x":12,"y":0,"properties":{"view":"timeSeries","title":"ALB 5xx / Healthy Host","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["AWS/ApplicationELB","HTTPCode_ELB_5XX_Count","LoadBalancer","",
+              {
+                "Fn::GetAtt": [
+                  "Alb16C2F182",
+                  "LoadBalancerFullName",
+                ],
+              },
+              "",{"stat":"Sum"}],["AWS/ApplicationELB","HealthyHostCount","LoadBalancer","",
+              {
+                "Fn::Select": [
+                  1,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Ref": "AlbHttp7966E42E",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Ref": "AlbHttp7966E42E",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  3,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Ref": "AlbHttp7966E42E",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "","TargetGroup","",
+              {
+                "Fn::GetAtt": [
+                  "AppTgBEDAABDD",
+                  "TargetGroupFullName",
+                ],
+              },
+              "",{"yAxis":"right"}]],"yAxis":{}}}]}",
+            ],
+          ],
+        },
+        "DashboardName": "gameday-legacy-review",
+      },
+      "Type": "AWS::CloudWatch::Dashboard",
+    },
+    "TerminateEc2Experiment": {
+      "Properties": {
+        "Actions": {
+          "Terminate": {
+            "ActionId": "aws:ec2:terminate-instances",
+            "Description": "Terminate the single SPOF EC2 instance",
+            "Targets": {
+              "Instances": "SpofInstance",
+            },
+          },
+        },
+        "Description": "scenario-03: 単一 EC2 (SPOF) を terminate。参加者が ECS 化で復旧する",
+        "ExperimentReportConfiguration": {
+          "DataSources": {
+            "CloudWatchDashboards": [
+              {
+                "DashboardIdentifier": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":cloudwatch::",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":dashboard/gameday-legacy-review",
+                    ],
+                  ],
+                },
+              },
+            ],
+          },
+          "Outputs": {
+            "ExperimentReportS3Configuration": {
+              "BucketName": {
+                "Ref": "FisReportBucketFF54701A",
+              },
+              "Prefix": "scenario-03/",
+            },
+          },
+          "PostExperimentDuration": "PT75M",
+          "PreExperimentDuration": "PT10M",
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "FisRoleF2C479C1",
+            "Arn",
+          ],
+        },
+        "StopConditions": [
+          {
+            "Source": "aws:cloudwatch:alarm",
+            "Value": {
+              "Fn::GetAtt": [
+                "AbortAlarm0223496C",
+                "Arn",
+              ],
+            },
+          },
+        ],
+        "Tags": {
+          "Name": "gameday-scenario-03-terminate-ec2",
+          "gameday": "true",
+        },
+        "Targets": {
+          "SpofInstance": {
+            "Filters": [
+              {
+                "Path": "VpcId",
+                "Values": [
+                  {
+                    "Ref": "Vpc8378EB38",
+                  },
+                ],
+              },
+              {
+                "Path": "State.Name",
+                "Values": [
+                  "running",
+                ],
+              },
+            ],
+            "ResourceTags": {
+              "GameDayScenario": "03",
+            },
+            "ResourceType": "aws:ec2:instance",
+            "SelectionMode": "COUNT(1)",
+          },
+        },
+      },
+      "Type": "AWS::FIS::ExperimentTemplate",
+    },
+    "Vpc8378EB38": {
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::VPC",
+    },
+    "VpcIGWD7BA715C": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::InternetGateway",
+    },
+    "VpcVPCGWBF912B6E": {
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "VpcIGWD7BA715C",
+        },
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+    },
+    "VpcappSubnet1DefaultRoute64294A8F": {
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "VpcpublicSubnet1NATGatewayA036E8A6",
+        },
+        "RouteTableId": {
+          "Ref": "VpcappSubnet1RouteTable072E8E09",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcappSubnet1RouteTable072E8E09": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/appSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcappSubnet1RouteTableAssociation168BF781": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcappSubnet1RouteTable072E8E09",
+        },
+        "SubnetId": {
+          "Ref": "VpcappSubnet1SubnetAE489B2F",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcappSubnet1SubnetAE489B2F": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "app",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/appSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcappSubnet2DefaultRouteEBCCC1EA": {
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "VpcpublicSubnet1NATGatewayA036E8A6",
+        },
+        "RouteTableId": {
+          "Ref": "VpcappSubnet2RouteTableB76BFC59",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcappSubnet2RouteTableAssociation81E96A75": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcappSubnet2RouteTableB76BFC59",
+        },
+        "SubnetId": {
+          "Ref": "VpcappSubnet2Subnet2449FB56",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcappSubnet2RouteTableB76BFC59": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/appSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcappSubnet2Subnet2449FB56": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "app",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/appSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcdataSubnet1RouteTableAF5F53E0": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/dataSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcdataSubnet1RouteTableAssociation9E9FDBBB": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcdataSubnet1RouteTableAF5F53E0",
+        },
+        "SubnetId": {
+          "Ref": "VpcdataSubnet1SubnetE2B009FB",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcdataSubnet1SubnetE2B009FB": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.4.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "data",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/dataSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcdataSubnet2RouteTable94FA483A": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/dataSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcdataSubnet2RouteTableAssociation6C8F2058": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcdataSubnet2RouteTable94FA483A",
+        },
+        "SubnetId": {
+          "Ref": "VpcdataSubnet2SubnetAD08DFFF",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcdataSubnet2SubnetAD08DFFF": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.5.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "data",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/dataSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcpublicSubnet1DefaultRouteB88F9E93": {
+      "DependsOn": [
+        "VpcVPCGWBF912B6E",
+      ],
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VpcIGWD7BA715C",
+        },
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet1RouteTable15C15F8E",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcpublicSubnet1EIP411541E6": {
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/publicSubnet1",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::EIP",
+    },
+    "VpcpublicSubnet1NATGatewayA036E8A6": {
+      "DependsOn": [
+        "VpcpublicSubnet1DefaultRouteB88F9E93",
+        "VpcpublicSubnet1RouteTableAssociation4E83B6E4",
+      ],
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "VpcpublicSubnet1EIP411541E6",
+            "AllocationId",
+          ],
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet1Subnet2BB74ED7",
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/publicSubnet1",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::NatGateway",
+    },
+    "VpcpublicSubnet1RouteTable15C15F8E": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/publicSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcpublicSubnet1RouteTableAssociation4E83B6E4": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet1RouteTable15C15F8E",
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet1Subnet2BB74ED7",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcpublicSubnet1Subnet2BB74ED7": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "public",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/publicSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcpublicSubnet2DefaultRoute732F0BEB": {
+      "DependsOn": [
+        "VpcVPCGWBF912B6E",
+      ],
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VpcIGWD7BA715C",
+        },
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet2RouteTableC5A6DF77",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcpublicSubnet2RouteTableAssociationCCE257FF": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet2RouteTableC5A6DF77",
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet2SubnetE34B022A",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcpublicSubnet2RouteTableC5A6DF77": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/publicSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcpublicSubnet2SubnetE34B022A": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "public",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public",
+          },
+          {
+            "Key": "Name",
+            "Value": "Legacy/Vpc/publicSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
+
+exports[`snapshot: 本流 3 スタック (App / Observability / Fis) > App 1`] = `
+{
+  "Outputs": {
+    "AlbUrl": {
+      "Description": "GameDay 対象アプリの URL",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "Alb16C2F182",
+                "DNSName",
+              ],
+            },
+          ],
+        ],
+      },
+    },
+    "DbEndpoint": {
+      "Description": "Aurora writer endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseB269D8BB",
+          "Endpoint.Address",
+        ],
+      },
+    },
+    "ExportsOutputFnGetAttAlb16C2F182DNSNameB67BDABC": {
+      "Export": {
+        "Name": "App:ExportsOutputFnGetAttAlb16C2F182DNSNameB67BDABC",
+      },
+      "Value": {
+        "Fn::GetAtt": [
+          "Alb16C2F182",
+          "DNSName",
+        ],
+      },
+    },
+    "ExportsOutputFnGetAttAlb16C2F182LoadBalancerFullName73BA17C5": {
+      "Export": {
+        "Name": "App:ExportsOutputFnGetAttAlb16C2F182LoadBalancerFullName73BA17C5",
+      },
+      "Value": {
+        "Fn::GetAtt": [
+          "Alb16C2F182",
+          "LoadBalancerFullName",
+        ],
+      },
+    },
+    "ExportsOutputFnGetAttAlbHttpEcsGroupF902BCDDTargetGroupFullNameF9064AB4": {
+      "Export": {
+        "Name": "App:ExportsOutputFnGetAttAlbHttpEcsGroupF902BCDDTargetGroupFullNameF9064AB4",
+      },
+      "Value": {
+        "Fn::GetAtt": [
+          "AlbHttpEcsGroupF902BCDD",
+          "TargetGroupFullName",
+        ],
+      },
+    },
+    "ExportsOutputRefAlbHttp7966E42EA6057246": {
+      "Export": {
+        "Name": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+      },
+      "Value": {
+        "Ref": "AlbHttp7966E42E",
+      },
+    },
+    "ExportsOutputRefDatabaseB269D8BB88F4B1C4": {
+      "Export": {
+        "Name": "App:ExportsOutputRefDatabaseB269D8BB88F4B1C4",
+      },
+      "Value": {
+        "Ref": "DatabaseB269D8BB",
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+  },
+  "Resources": {
+    "Alb16C2F182": {
+      "DependsOn": [
+        "VpcpublicSubnet1DefaultRouteB88F9E93",
+        "VpcpublicSubnet1RouteTableAssociation4E83B6E4",
+        "VpcpublicSubnet2DefaultRoute732F0BEB",
+        "VpcpublicSubnet2RouteTableAssociationCCE257FF",
+      ],
+      "Properties": {
+        "LoadBalancerAttributes": [
+          {
+            "Key": "deletion_protection.enabled",
+            "Value": "false",
+          },
+        ],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "AlbSecurityGroup580F65A6",
+              "GroupId",
+            ],
+          },
+        ],
+        "Subnets": [
+          {
+            "Ref": "VpcpublicSubnet1Subnet2BB74ED7",
+          },
+          {
+            "Ref": "VpcpublicSubnet2SubnetE34B022A",
+          },
+        ],
+        "Type": "application",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    },
+    "AlbHttp7966E42E": {
+      "Properties": {
+        "DefaultActions": [
+          {
+            "TargetGroupArn": {
+              "Ref": "AlbHttpEcsGroupF902BCDD",
+            },
+            "Type": "forward",
+          },
+        ],
+        "LoadBalancerArn": {
+          "Ref": "Alb16C2F182",
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+    },
+    "AlbHttpEcsGroupF902BCDD": {
+      "Properties": {
+        "HealthCheckIntervalSeconds": 15,
+        "HealthCheckPath": "/healthz",
+        "HealthyThresholdCount": 2,
+        "Port": 80,
+        "Protocol": "HTTP",
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "10",
+          },
+          {
+            "Key": "stickiness.enabled",
+            "Value": "false",
+          },
+        ],
+        "TargetType": "ip",
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+    },
+    "AlbSecurityGroup580F65A6": {
+      "Properties": {
+        "GroupDescription": "Automatically created Security Group for ELB AppAlb5EC3B3DF",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow from anyone on port 80",
+            "FromPort": 80,
+            "IpProtocol": "tcp",
+            "ToPort": 80,
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "AlbSecurityGrouptoAppServiceSecurityGroup543EB7578072118779": {
+      "Properties": {
+        "Description": "Load balancer to target",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "ServiceSecurityGroupC96ED6A7",
+            "GroupId",
+          ],
+        },
+        "FromPort": 80,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "AlbSecurityGroup580F65A6",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "ToPort": 80,
+      },
+      "Type": "AWS::EC2::SecurityGroupEgress",
+    },
+    "AppDatabaseSecret64B270593fdaad7efa858a3daf9490cf0a702aeb": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Generated by the CDK for stack: ",
+              {
+                "Ref": "AWS::StackName",
+              },
+            ],
+          ],
+        },
+        "GenerateSecretString": {
+          "ExcludeCharacters": " %+~\`#$&*()|[]{}:;<>?!'/@"\\",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "SecretStringTemplate": "{"username":"admin"}",
+        },
+      },
+      "Type": "AWS::SecretsManager::Secret",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "ClusterEB0386A7": {
+      "Properties": {
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled",
+          },
+        ],
+      },
+      "Type": "AWS::ECS::Cluster",
+    },
+    "DatabaseB269D8BB": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "CopyTagsToSnapshot": true,
+        "DBClusterParameterGroupName": "default.aurora-mysql8.0",
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnets56F17B9A",
+        },
+        "DatabaseName": "gameday",
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.10.4",
+        "MasterUserPassword": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "AppDatabaseSecret64B270593fdaad7efa858a3daf9490cf0a702aeb",
+              },
+              ":SecretString:password::}}",
+            ],
+          ],
+        },
+        "MasterUsername": "admin",
+        "ServerlessV2ScalingConfiguration": {
+          "MaxCapacity": 1,
+          "MinCapacity": 0.5,
+        },
+        "StorageEncrypted": true,
+        "VpcSecurityGroupIds": [
+          {
+            "Fn::GetAtt": [
+              "DatabaseSecurityGroup5C91FDCB",
+              "GroupId",
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::RDS::DBCluster",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "DatabaseSecretAttachmentE5D1B020": {
+      "Properties": {
+        "SecretId": {
+          "Ref": "AppDatabaseSecret64B270593fdaad7efa858a3daf9490cf0a702aeb",
+        },
+        "TargetId": {
+          "Ref": "DatabaseB269D8BB",
+        },
+        "TargetType": "AWS::RDS::DBCluster",
+      },
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+    },
+    "DatabaseSecurityGroup5C91FDCB": {
+      "Properties": {
+        "GroupDescription": "RDS security group",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "DatabaseSecurityGroupfromAppServiceSecurityGroup543EB757IndirectPort53177A03": {
+      "Properties": {
+        "Description": "Allow Fargate tasks to reach Aurora",
+        "FromPort": {
+          "Fn::GetAtt": [
+            "DatabaseB269D8BB",
+            "Endpoint.Port",
+          ],
+        },
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup5C91FDCB",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "ServiceSecurityGroupC96ED6A7",
+            "GroupId",
+          ],
+        },
+        "ToPort": {
+          "Fn::GetAtt": [
+            "DatabaseB269D8BB",
+            "Endpoint.Port",
+          ],
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroupIngress",
+    },
+    "DatabaseSubnets56F17B9A": {
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnets for Database database",
+        "SubnetIds": [
+          {
+            "Ref": "VpcdataSubnet1SubnetE2B009FB",
+          },
+          {
+            "Ref": "VpcdataSubnet2SubnetAD08DFFF",
+          },
+        ],
+      },
+      "Type": "AWS::RDS::DBSubnetGroup",
+    },
+    "Databasereader13B43287": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "Databasewriter2462CC03",
+        "VpcdataSubnet1RouteTableAssociation9E9FDBBB",
+        "VpcdataSubnet2RouteTableAssociation6C8F2058",
+      ],
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Ref": "DatabaseB269D8BB",
+        },
+        "DBInstanceClass": "db.serverless",
+        "Engine": "aurora-mysql",
+        "PromotionTier": 1,
+        "PubliclyAccessible": false,
+      },
+      "Type": "AWS::RDS::DBInstance",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "Databasewriter2462CC03": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "VpcdataSubnet1RouteTableAssociation9E9FDBBB",
+        "VpcdataSubnet2RouteTableAssociation6C8F2058",
+      ],
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Ref": "DatabaseB269D8BB",
+        },
+        "DBInstanceClass": "db.serverless",
+        "Engine": "aurora-mysql",
+        "PromotionTier": 0,
+        "PubliclyAccessible": false,
+      },
+      "Type": "AWS::RDS::DBInstance",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "ServiceD69D759B": {
+      "DependsOn": [
+        "AlbHttpEcsGroupF902BCDD",
+        "AlbHttp7966E42E",
+        "TaskDefTaskRole1EDB4A67",
+      ],
+      "Properties": {
+        "Cluster": {
+          "Ref": "ClusterEB0386A7",
+        },
+        "DeploymentConfiguration": {
+          "Alarms": {
+            "AlarmNames": [],
+            "Enable": false,
+            "Rollback": false,
+          },
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true,
+          },
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 50,
+        },
+        "DeploymentController": {
+          "Type": "ECS",
+        },
+        "DesiredCount": 2,
+        "EnableECSManagedTags": false,
+        "HealthCheckGracePeriodSeconds": 60,
+        "LaunchType": "FARGATE",
+        "LoadBalancers": [
+          {
+            "ContainerName": "app",
+            "ContainerPort": 80,
+            "TargetGroupArn": {
+              "Ref": "AlbHttpEcsGroupF902BCDD",
+            },
+          },
+        ],
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "SecurityGroups": [
+              {
+                "Fn::GetAtt": [
+                  "ServiceSecurityGroupC96ED6A7",
+                  "GroupId",
+                ],
+              },
+            ],
+            "Subnets": [
+              {
+                "Ref": "VpcappSubnet1SubnetAE489B2F",
+              },
+              {
+                "Ref": "VpcappSubnet2Subnet2449FB56",
+              },
+            ],
+          },
+        },
+        "PropagateTags": "SERVICE",
+        "Tags": [
+          {
+            "Key": "GameDayTarget",
+            "Value": "true",
+          },
+        ],
+        "TaskDefinition": {
+          "Ref": "TaskDef54694570",
+        },
+      },
+      "Type": "AWS::ECS::Service",
+    },
+    "ServiceSecurityGroupC96ED6A7": {
+      "DependsOn": [
+        "TaskDefTaskRole1EDB4A67",
+      ],
+      "Properties": {
+        "GroupDescription": "App/Service/SecurityGroup",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1",
+          },
+        ],
+        "Tags": [
+          {
+            "Key": "GameDayTarget",
+            "Value": "true",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "ServiceSecurityGroupfromAppAlbSecurityGroup0B3D165680EAE98CFF": {
+      "DependsOn": [
+        "TaskDefTaskRole1EDB4A67",
+      ],
+      "Properties": {
+        "Description": "Load balancer to target",
+        "FromPort": 80,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "ServiceSecurityGroupC96ED6A7",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "AlbSecurityGroup580F65A6",
+            "GroupId",
+          ],
+        },
+        "ToPort": 80,
+      },
+      "Type": "AWS::EC2::SecurityGroupIngress",
+    },
+    "TaskDef54694570": {
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "Environment": [
+              {
+                "Name": "DB_HOST",
+                "Value": {
+                  "Fn::GetAtt": [
+                    "DatabaseB269D8BB",
+                    "Endpoint.Address",
+                  ],
+                },
+              },
+              {
+                "Name": "DB_PORT",
+                "Value": {
+                  "Fn::GetAtt": [
+                    "DatabaseB269D8BB",
+                    "Endpoint.Port",
+                  ],
+                },
+              },
+              {
+                "Name": "DB_NAME",
+                "Value": "gameday",
+              },
+            ],
+            "Essential": true,
+            "Image": {
+              "Fn::Sub": "\${AWS::AccountId}.dkr.ecr.\${AWS::Region}.\${AWS::URLSuffix}/cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}:[ASSET_HASH]",
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "TaskDefappLogGroupA2E94E99",
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region",
+                },
+                "awslogs-stream-prefix": "gameday-app",
+              },
+            },
+            "Name": "app",
+            "PortMappings": [
+              {
+                "ContainerPort": 80,
+                "Protocol": "tcp",
+              },
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_SECRET",
+                "ValueFrom": {
+                  "Ref": "DatabaseSecretAttachmentE5D1B020",
+                },
+              },
+            ],
+          },
+        ],
+        "Cpu": "256",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "TaskDefExecutionRoleB4775C97",
+            "Arn",
+          ],
+        },
+        "Family": "AppTaskDefCC54C0A5",
+        "Memory": "512",
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE",
+        ],
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "TaskDefTaskRole1EDB4A67",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::ECS::TaskDefinition",
+    },
+    "TaskDefExecutionRoleB4775C97": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "TaskDefExecutionRoleDefaultPolicy0DBB737A": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ecr:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":repository/",
+                    {
+                      "Fn::Sub": "cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}",
+                    },
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": "ecr:GetAuthorizationToken",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TaskDefappLogGroupA2E94E99",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "DatabaseSecretAttachmentE5D1B020",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "TaskDefExecutionRoleDefaultPolicy0DBB737A",
+        "Roles": [
+          {
+            "Ref": "TaskDefExecutionRoleB4775C97",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "TaskDefTaskRole1EDB4A67": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "TaskDefappLogGroupA2E94E99": {
+      "DeletionPolicy": "Retain",
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "Vpc8378EB38": {
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::VPC",
+    },
+    "VpcIGWD7BA715C": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::InternetGateway",
+    },
+    "VpcVPCGWBF912B6E": {
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "VpcIGWD7BA715C",
+        },
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+    },
+    "VpcappSubnet1DefaultRoute64294A8F": {
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "VpcpublicSubnet1NATGatewayA036E8A6",
+        },
+        "RouteTableId": {
+          "Ref": "VpcappSubnet1RouteTable072E8E09",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcappSubnet1RouteTable072E8E09": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/appSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcappSubnet1RouteTableAssociation168BF781": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcappSubnet1RouteTable072E8E09",
+        },
+        "SubnetId": {
+          "Ref": "VpcappSubnet1SubnetAE489B2F",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcappSubnet1SubnetAE489B2F": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "app",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private",
+          },
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/appSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcappSubnet2DefaultRouteEBCCC1EA": {
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "VpcpublicSubnet1NATGatewayA036E8A6",
+        },
+        "RouteTableId": {
+          "Ref": "VpcappSubnet2RouteTableB76BFC59",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcappSubnet2RouteTableAssociation81E96A75": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcappSubnet2RouteTableB76BFC59",
+        },
+        "SubnetId": {
+          "Ref": "VpcappSubnet2Subnet2449FB56",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcappSubnet2RouteTableB76BFC59": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/appSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcappSubnet2Subnet2449FB56": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "app",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private",
+          },
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/appSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcdataSubnet1RouteTableAF5F53E0": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/dataSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcdataSubnet1RouteTableAssociation9E9FDBBB": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcdataSubnet1RouteTableAF5F53E0",
+        },
+        "SubnetId": {
+          "Ref": "VpcdataSubnet1SubnetE2B009FB",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcdataSubnet1SubnetE2B009FB": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.4.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "data",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated",
+          },
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/dataSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcdataSubnet2RouteTable94FA483A": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/dataSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcdataSubnet2RouteTableAssociation6C8F2058": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcdataSubnet2RouteTable94FA483A",
+        },
+        "SubnetId": {
+          "Ref": "VpcdataSubnet2SubnetAD08DFFF",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcdataSubnet2SubnetAD08DFFF": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.5.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "data",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated",
+          },
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/dataSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcpublicSubnet1DefaultRouteB88F9E93": {
+      "DependsOn": [
+        "VpcVPCGWBF912B6E",
+      ],
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VpcIGWD7BA715C",
+        },
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet1RouteTable15C15F8E",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcpublicSubnet1EIP411541E6": {
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/publicSubnet1",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::EIP",
+    },
+    "VpcpublicSubnet1NATGatewayA036E8A6": {
+      "DependsOn": [
+        "VpcpublicSubnet1DefaultRouteB88F9E93",
+        "VpcpublicSubnet1RouteTableAssociation4E83B6E4",
+      ],
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "VpcpublicSubnet1EIP411541E6",
+            "AllocationId",
+          ],
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet1Subnet2BB74ED7",
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/publicSubnet1",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::NatGateway",
+    },
+    "VpcpublicSubnet1RouteTable15C15F8E": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/publicSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcpublicSubnet1RouteTableAssociation4E83B6E4": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet1RouteTable15C15F8E",
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet1Subnet2BB74ED7",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcpublicSubnet1Subnet2BB74ED7": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "public",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public",
+          },
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/publicSubnet1",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "VpcpublicSubnet2DefaultRoute732F0BEB": {
+      "DependsOn": [
+        "VpcVPCGWBF912B6E",
+      ],
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VpcIGWD7BA715C",
+        },
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet2RouteTableC5A6DF77",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "VpcpublicSubnet2RouteTableAssociationCCE257FF": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet2RouteTableC5A6DF77",
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet2SubnetE34B022A",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "VpcpublicSubnet2RouteTableC5A6DF77": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/publicSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "VpcpublicSubnet2SubnetE34B022A": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "",
+            },
+          ],
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "public",
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public",
+          },
+          {
+            "Key": "Name",
+            "Value": "App/Vpc/publicSubnet2",
+          },
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
+
+exports[`snapshot: 本流 3 スタック (App / Observability / Fis) > Fis 1`] = `
+{
+  "Outputs": {
+    "FailoverDbTemplateId": {
+      "Description": "シナリオ2: aws fis start-experiment --experiment-template-id <これ>",
+      "Value": {
+        "Fn::GetAtt": [
+          "FailoverDb",
+          "Id",
+        ],
+      },
+    },
+    "StopTaskTemplateId": {
+      "Description": "シナリオ1: aws fis start-experiment --experiment-template-id <これ>",
+      "Value": {
+        "Fn::GetAtt": [
+          "StopOneTask",
+          "Id",
+        ],
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+  },
+  "Resources": {
+    "FailoverDb": {
+      "Properties": {
+        "Actions": {
+          "Failover": {
+            "ActionId": "aws:rds:failover-db-cluster",
+            "Description": "Force an Aurora cluster failover",
+            "Targets": {
+              "Clusters": "Clusters",
+            },
+          },
+        },
+        "Description": "GameDay: Aurora をフェイルオーバーし、書き込み先切替時の挙動を観察する",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "FisRdsRoleA8D5B27B",
+            "Arn",
+          ],
+        },
+        "StopConditions": [
+          {
+            "Source": "aws:cloudwatch:alarm",
+            "Value": {
+              "Fn::ImportValue": "Obs:ExportsOutputFnGetAttHttp5xxStopAlarmB47064CFArn5D42F46B",
+            },
+          },
+        ],
+        "Tags": {
+          "Name": "gameday-failover-db",
+        },
+        "Targets": {
+          "Clusters": {
+            "ResourceArns": [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":rds:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":cluster:",
+                    {
+                      "Fn::ImportValue": "App:ExportsOutputRefDatabaseB269D8BB88F4B1C4",
+                    },
+                  ],
+                ],
+              },
+            ],
+            "ResourceType": "aws:rds:cluster",
+            "SelectionMode": "ALL",
+          },
+        },
+      },
+      "Type": "AWS::FIS::ExperimentTemplate",
+    },
+    "FisEcsRoleCB8E43DC": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "fis.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "GameDay FIS role (ECS stop-task)",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSFaultInjectionSimulatorECSAccess",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "FisEcsRoleDefaultPolicyFD85F3E9": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "cloudwatch:DescribeAlarms",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FisEcsRoleDefaultPolicyFD85F3E9",
+        "Roles": [
+          {
+            "Ref": "FisEcsRoleCB8E43DC",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "FisRdsRoleA8D5B27B": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "fis.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "GameDay FIS role (RDS failover)",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSFaultInjectionSimulatorRDSAccess",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "FisRdsRoleDefaultPolicy6934E5EC": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "cloudwatch:DescribeAlarms",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FisRdsRoleDefaultPolicy6934E5EC",
+        "Roles": [
+          {
+            "Ref": "FisRdsRoleA8D5B27B",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "StopOneTask": {
+      "Properties": {
+        "Actions": {
+          "StopTask": {
+            "ActionId": "aws:ecs:stop-task",
+            "Description": "Stop one targeted Fargate task",
+            "Targets": {
+              "Tasks": "Tasks",
+            },
+          },
+        },
+        "Description": "GameDay: Fargate タスクを 1 つ停止し、冗長性と回復を観察する",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "FisEcsRoleCB8E43DC",
+            "Arn",
+          ],
+        },
+        "StopConditions": [
+          {
+            "Source": "aws:cloudwatch:alarm",
+            "Value": {
+              "Fn::ImportValue": "Obs:ExportsOutputFnGetAttHttp5xxStopAlarmB47064CFArn5D42F46B",
+            },
+          },
+        ],
+        "Tags": {
+          "Name": "gameday-stop-one-task",
+        },
+        "Targets": {
+          "Tasks": {
+            "ResourceTags": {
+              "GameDayTarget": "true",
+            },
+            "ResourceType": "aws:ecs:task",
+            "SelectionMode": "COUNT(1)",
+          },
+        },
+      },
+      "Type": "AWS::FIS::ExperimentTemplate",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
+
+exports[`snapshot: 本流 3 スタック (App / Observability / Fis) > Observability 1`] = `
+{
+  "Outputs": {
+    "DashboardName": {
+      "Value": {
+        "Ref": "ReviewDashboard555E7E52",
+      },
+    },
+    "ExportsOutputFnGetAttHttp5xxStopAlarmB47064CFArn5D42F46B": {
+      "Export": {
+        "Name": "Obs:ExportsOutputFnGetAttHttp5xxStopAlarmB47064CFArn5D42F46B",
+      },
+      "Value": {
+        "Fn::GetAtt": [
+          "Http5xxStopAlarmB47064CF",
+          "Arn",
+        ],
+      },
+    },
+    "StopAlarmArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Http5xxStopAlarmB47064CF",
+          "Arn",
+        ],
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+  },
+  "Resources": {
+    "Http5xxStopAlarmB47064CF": {
+      "Properties": {
+        "AlarmDescription": "FIS 停止条件: 5xx が想定の爆発半径を超えたら実験を止める",
+        "AlarmName": "gameday-5xx-stop-condition",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": 1,
+        "Metrics": [
+          {
+            "Expression": "elb + target",
+            "Id": "expr_1",
+            "ReturnData": true,
+          },
+          {
+            "Id": "elb",
+            "MetricStat": {
+              "Metric": {
+                "Dimensions": [
+                  {
+                    "Name": "LoadBalancer",
+                    "Value": {
+                      "Fn::ImportValue": "App:ExportsOutputFnGetAttAlb16C2F182LoadBalancerFullName73BA17C5",
+                    },
+                  },
+                ],
+                "MetricName": "HTTPCode_ELB_5XX_Count",
+                "Namespace": "AWS/ApplicationELB",
+              },
+              "Period": 60,
+              "Stat": "Sum",
+            },
+            "ReturnData": false,
+          },
+          {
+            "Id": "target",
+            "MetricStat": {
+              "Metric": {
+                "Dimensions": [
+                  {
+                    "Name": "LoadBalancer",
+                    "Value": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Fn::Select": [
+                              1,
+                              {
+                                "Fn::Split": [
+                                  "/",
+                                  {
+                                    "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                                  },
+                                ],
+                              },
+                            ],
+                          },
+                          "/",
+                          {
+                            "Fn::Select": [
+                              2,
+                              {
+                                "Fn::Split": [
+                                  "/",
+                                  {
+                                    "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                                  },
+                                ],
+                              },
+                            ],
+                          },
+                          "/",
+                          {
+                            "Fn::Select": [
+                              3,
+                              {
+                                "Fn::Split": [
+                                  "/",
+                                  {
+                                    "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                                  },
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      ],
+                    },
+                  },
+                  {
+                    "Name": "TargetGroup",
+                    "Value": {
+                      "Fn::ImportValue": "App:ExportsOutputFnGetAttAlbHttpEcsGroupF902BCDDTargetGroupFullNameF9064AB4",
+                    },
+                  },
+                ],
+                "MetricName": "HTTPCode_Target_5XX_Count",
+                "Namespace": "AWS/ApplicationELB",
+              },
+              "Period": 60,
+              "Stat": "Sum",
+            },
+            "ReturnData": false,
+          },
+        ],
+        "Threshold": 10,
+        "TreatMissingData": "notBreaching",
+      },
+      "Type": "AWS::CloudWatch::Alarm",
+    },
+    "ReviewDashboard555E7E52": {
+      "Properties": {
+        "DashboardBody": {
+          "Fn::Join": [
+            "",
+            [
+              "{"widgets":[{"type":"metric","width":12,"height":6,"x":0,"y":0,"properties":{"view":"timeSeries","title":"Canary 成功率 (%)","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["CloudWatchSynthetics","SuccessPercent","CanaryName","",
+              {
+                "Ref": "TopPageCanary9F326E4D",
+              },
+              "",{"period":60}]],"yAxis":{}}},{"type":"metric","width":12,"height":6,"x":12,"y":0,"properties":{"view":"timeSeries","title":"ALB / Target 5xx (顧客影響)","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["AWS/ApplicationELB","HTTPCode_ELB_5XX_Count","LoadBalancer","",
+              {
+                "Fn::ImportValue": "App:ExportsOutputFnGetAttAlb16C2F182LoadBalancerFullName73BA17C5",
+              },
+              "",{"period":60,"stat":"Sum"}],["AWS/ApplicationELB","HTTPCode_Target_5XX_Count","LoadBalancer","",
+              {
+                "Fn::Select": [
+                  1,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  3,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "","TargetGroup","",
+              {
+                "Fn::ImportValue": "App:ExportsOutputFnGetAttAlbHttpEcsGroupF902BCDDTargetGroupFullNameF9064AB4",
+              },
+              "",{"period":60,"stat":"Sum"}]],"yAxis":{}}},{"type":"metric","width":12,"height":6,"x":0,"y":6,"properties":{"view":"timeSeries","title":"Healthy Host Count (冗長性)","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["AWS/ApplicationELB","HealthyHostCount","LoadBalancer","",
+              {
+                "Fn::Select": [
+                  1,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  3,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "","TargetGroup","",
+              {
+                "Fn::ImportValue": "App:ExportsOutputFnGetAttAlbHttpEcsGroupF902BCDDTargetGroupFullNameF9064AB4",
+              },
+              ""]],"yAxis":{}}},{"type":"metric","width":12,"height":6,"x":12,"y":6,"properties":{"view":"timeSeries","title":"Target Response Time","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["AWS/ApplicationELB","TargetResponseTime","LoadBalancer","",
+              {
+                "Fn::Select": [
+                  1,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "/",
+              {
+                "Fn::Select": [
+                  3,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::ImportValue": "App:ExportsOutputRefAlbHttp7966E42EA6057246",
+                      },
+                    ],
+                  },
+                ],
+              },
+              "","TargetGroup","",
+              {
+                "Fn::ImportValue": "App:ExportsOutputFnGetAttAlbHttpEcsGroupF902BCDDTargetGroupFullNameF9064AB4",
+              },
+              ""]],"yAxis":{}}},{"type":"metric","width":12,"height":6,"x":0,"y":12,"properties":{"view":"timeSeries","title":"Aurora 接続数 (データ層)","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["AWS/RDS","DatabaseConnections","DBClusterIdentifier","",
+              {
+                "Fn::ImportValue": "App:ExportsOutputRefDatabaseB269D8BB88F4B1C4",
+              },
+              ""]],"yAxis":{}}},{"type":"metric","width":12,"height":6,"x":12,"y":12,"properties":{"view":"timeSeries","title":"Aurora CPU 使用率 (データ層)","region":"",
+              {
+                "Ref": "AWS::Region",
+              },
+              "","metrics":[["AWS/RDS","CPUUtilization","DBClusterIdentifier","",
+              {
+                "Fn::ImportValue": "App:ExportsOutputRefDatabaseB269D8BB88F4B1C4",
+              },
+              ""]],"yAxis":{}}}]}",
+            ],
+          ],
+        },
+        "DashboardName": "gameday-review",
+      },
+      "Type": "AWS::CloudWatch::Dashboard",
+    },
+    "TopPageCanary9F326E4D": {
+      "Properties": {
+        "ArtifactS3Location": {
+          "Fn::Join": [
+            "",
+            [
+              "s3://",
+              {
+                "Ref": "TopPageCanaryArtifactsBucketCB2AA3B9",
+              },
+            ],
+          ],
+        },
+        "Code": {
+          "Handler": "index.handler",
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "TopPageCanaryServiceRole80420704",
+            "Arn",
+          ],
+        },
+        "Name": "gameday-top",
+        "RunConfig": {
+          "EnvironmentVariables": {
+            "URL": {
+              "Fn::Join": [
+                "",
+                [
+                  "http://",
+                  {
+                    "Fn::ImportValue": "App:ExportsOutputFnGetAttAlb16C2F182DNSNameB67BDABC",
+                  },
+                ],
+              ],
+            },
+          },
+        },
+        "RuntimeVersion": "syn-nodejs-playwright-6.0",
+        "Schedule": {
+          "DurationInSeconds": "0",
+          "Expression": "rate(1 minute)",
+        },
+        "StartCanaryAfterCreation": true,
+      },
+      "Type": "AWS::Synthetics::Canary",
+    },
+    "TopPageCanaryArtifactsBucketCB2AA3B9": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+              },
+            },
+          ],
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "TopPageCanaryArtifactsBucketPolicy05071552": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "TopPageCanaryArtifactsBucketCB2AA3B9",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "TopPageCanaryArtifactsBucketCB2AA3B9",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "TopPageCanaryArtifactsBucketCB2AA3B9",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "TopPageCanaryServiceRole80420704": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Policies": [
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "s3:ListAllMyBuckets",
+                  "Effect": "Allow",
+                  "Resource": "*",
+                },
+                {
+                  "Action": "s3:GetBucketLocation",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TopPageCanaryArtifactsBucketCB2AA3B9",
+                      "Arn",
+                    ],
+                  },
+                },
+                {
+                  "Action": "s3:PutObject",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::GetAtt": [
+                            "TopPageCanaryArtifactsBucketCB2AA3B9",
+                            "Arn",
+                          ],
+                        },
+                        "/*",
+                      ],
+                    ],
+                  },
+                },
+                {
+                  "Action": "cloudwatch:PutMetricData",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "CloudWatchSynthetics",
+                    },
+                  },
+                  "Effect": "Allow",
+                  "Resource": "*",
+                },
+                {
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup",
+                    "logs:PutLogEvents",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition",
+                        },
+                        ":logs:",
+                        {
+                          "Ref": "AWS::Region",
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId",
+                        },
+                        ":log-group:/aws/lambda/cwsyn-*",
+                      ],
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "canaryPolicy",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
