@@ -1,19 +1,17 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import App from './App';
+import fixture from './testdata/gameday-fixture.json';
 import type { GamedayData } from './types';
 
 /**
  * レンダリングスモークテスト。「データ → DOM」の描画が壊れていないことを守る。
- * 見た目 (レイアウト・配色) は対象外 — それは npm run dashboard で目視する。
+ * 本番データ (public/data/gameday.json) は GameDay 中に書き換わるため、
+ * テストは固定フィクスチャを使う。見た目の確認は npm run dashboard で目視する。
  */
 
-const data: GamedayData = JSON.parse(
-  readFileSync(join(process.cwd(), 'dashboard', 'public', 'data', 'gameday.json'), 'utf8'),
-);
+const data = fixture as GamedayData;
 
 vi.stubGlobal('fetch', (async () => ({ ok: true, json: async () => data })) as unknown as typeof fetch);
 

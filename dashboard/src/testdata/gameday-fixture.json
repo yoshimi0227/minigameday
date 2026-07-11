@@ -1,0 +1,76 @@
+{
+  "event": {
+    "title": "ミニ GameDay #1 — ALB + Fargate + Aurora 3層アプリ",
+    "date": "2026-07-15",
+    "team": "Team Phoenix",
+    "note": "サンプルデータ。GameDay 当日はこのファイルを編集すると画面に即時反映される (npm run dashboard)"
+  },
+  "injects": [
+    {
+      "id": "inject-1",
+      "scenarioId": "scenario-01",
+      "time": "10:05",
+      "title": "Fargate タスクを 1 つ停止",
+      "instruction": "運営が FIS 実験 gameday-stop-one-task を開始。参加者はユーザー影響の有無を判断し、原因を特定して対応方針を宣言する。",
+      "response": "10:08 に canary 成功率の維持を確認し「ユーザー影響なし」と判断。ECS イベントからタスク停止を特定し、自己回復を確認して静観を選択。",
+      "status": "success",
+      "detectionMinutes": 3,
+      "recoveryMinutes": 6,
+      "score": 90,
+      "maxScore": 100,
+      "notes": "影響なしの判断が速かった。静観の判断基準 (canary 成功率) をチームで言語化できた。"
+    },
+    {
+      "id": "inject-2",
+      "scenarioId": "scenario-02",
+      "time": "11:00",
+      "title": "Aurora フェイルオーバー",
+      "instruction": "運営が FIS 実験 gameday-failover-db を開始。参加者は書き込みエラーを検知し、影響範囲を説明して回復を確認する。",
+      "response": "11:04 に canary の失敗で検知。アプリの DB 再接続が進まず、desiredCount を一時的に 2→3 に手動変更してタスクを入れ替え (実験後に cdk drift で検出)。",
+      "status": "partial",
+      "detectionMinutes": 4,
+      "recoveryMinutes": 14,
+      "score": 60,
+      "maxScore": 100,
+      "notes": "接続プールの再接続設定に課題。手動変更は振り返りで IaC への反映を判断する。"
+    }
+  ],
+  "feedback": [
+    {
+      "type": "keep",
+      "scenarioId": "scenario-01",
+      "author": "maehara",
+      "comment": "「まず canary の成功率を見る」動きがチームに定着していた。ユーザー影響の有無から会話が始まるのが良い。"
+    },
+    {
+      "type": "keep",
+      "scenarioId": null,
+      "author": "運営",
+      "comment": "cdk drift が desiredCount の手動変更をそのまま検出できた。応急処置の記録として振り返りの一次資料になる。"
+    },
+    {
+      "type": "problem",
+      "scenarioId": "scenario-02",
+      "author": "maehara",
+      "comment": "フェイルオーバー後のアプリ再接続に 10 分以上かかった。接続プールの maxLifetime / 再接続設定が未調整。"
+    },
+    {
+      "type": "problem",
+      "scenarioId": "scenario-01",
+      "author": "参加者A",
+      "comment": "ECS コンソールとダッシュボードを行き来して情報が分散した。見る場所の優先順位を決めておきたい。"
+    },
+    {
+      "type": "try",
+      "scenarioId": "scenario-02",
+      "author": "maehara",
+      "comment": "次回は aws:ecs:task-network-latency で「落ちないが遅い」障害を試す (SSM サイドカーの仕込みが前提)。"
+    },
+    {
+      "type": "try",
+      "scenarioId": null,
+      "author": "運営",
+      "comment": "検知時刻の記録係を決めておく。今回のタイムラインは記憶ベースの部分があった。"
+    }
+  ]
+}

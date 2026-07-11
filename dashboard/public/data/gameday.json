@@ -1,76 +1,70 @@
 {
   "event": {
-    "title": "ミニ GameDay #1 — ALB + Fargate + Aurora 3層アプリ",
-    "date": "2026-07-15",
-    "team": "Team Phoenix",
-    "note": "サンプルデータ。GameDay 当日はこのファイルを編集すると画面に即時反映される (npm run dashboard)"
+    "title": "ミニ GameDay リハーサル",
+    "date": "2026-07-11",
+    "team": "solo (リハーサル)",
+    "note": "通しリハーサル: デプロイ → ベースライン → FIS 実験 2 本 → 振り返り"
   },
   "injects": [
     {
       "id": "inject-1",
       "scenarioId": "scenario-01",
-      "time": "10:05",
-      "title": "Fargate タスクを 1 つ停止",
-      "instruction": "運営が FIS 実験 gameday-stop-one-task を開始。参加者はユーザー影響の有無を判断し、原因を特定して対応方針を宣言する。",
-      "response": "10:08 に canary 成功率の維持を確認し「ユーザー影響なし」と判断。ECS イベントからタスク停止を特定し、自己回復を確認して静観を選択。",
+      "time": "15:55",
+      "title": "Fargate タスク停止",
+      "instruction": "FIS 実験 gameday-stop-one-task (EXPLtguw23gC7TaXP8) を開始。ユーザー影響の有無を判断し、原因を特定して対応方針を宣言する。",
+      "response": "15:56 ECS イベントとタスク数 (2→1→2) で停止と自己回復を確認。canary は全 run PASSED でユーザー影響なしと判断し、静観を選択。",
       "status": "success",
-      "detectionMinutes": 3,
-      "recoveryMinutes": 6,
-      "score": 90,
+      "detectionMinutes": 1,
+      "recoveryMinutes": 1,
+      "score": 93,
       "maxScore": 100,
-      "notes": "影響なしの判断が速かった。静観の判断基準 (canary 成功率) をチームで言語化できた。"
+      "notes": "検知 38/40 (ECS イベント+canary で即確認)、対応 40/40 (影響なしの静観が正解)、伝達 15/20 (記録は自動、宣言は形式のみ)。回復は約 30 秒で仮説 (数分) より速い。"
     },
     {
       "id": "inject-2",
       "scenarioId": "scenario-02",
-      "time": "11:00",
+      "time": "15:58",
       "title": "Aurora フェイルオーバー",
-      "instruction": "運営が FIS 実験 gameday-failover-db を開始。参加者は書き込みエラーを検知し、影響範囲を説明して回復を確認する。",
-      "response": "11:04 に canary の失敗で検知。アプリの DB 再接続が進まず、desiredCount を一時的に 2→3 に手動変更してタスクを入れ替え (実験後に cdk drift で検出)。",
+      "instruction": "FIS 実験 gameday-failover-db (EXP7hkWi4qi2Cy5iC2) を開始。書き込みエラーを検知し、影響範囲を説明して回復を確認する。",
+      "response": "canary・HTTP ポーリングとも異常なし。RDS イベントでフェイルオーバー実施 (15:58:21→15:59:04、43秒) とライター切替を確認し「ユーザー影響なし」と結論。",
       "status": "partial",
-      "detectionMinutes": 4,
-      "recoveryMinutes": 14,
-      "score": 60,
+      "detectionMinutes": 2,
+      "recoveryMinutes": 1,
+      "score": 80,
       "maxScore": 100,
-      "notes": "接続プールの再接続設定に課題。手動変更は振り返りで IaC への反映を判断する。"
+      "notes": "検知 25/40 (canary では検知不能 — SELECT 1 読み取りプローブの限界が露呈。RDS イベントで裏取り)、対応 40/40 (影響なしの検証と切替確認)、伝達 15/20。仮説『503 が出る』は外れ = 最大の学び。"
     }
   ],
   "feedback": [
     {
       "type": "keep",
-      "scenarioId": "scenario-01",
-      "author": "maehara",
-      "comment": "「まず canary の成功率を見る」動きがチームに定着していた。ユーザー影響の有無から会話が始まるのが良い。"
+      "scenarioId": null,
+      "author": "リハーサル",
+      "comment": "cdk drift が desiredCount の手動変更 (応急処置の模擬) を 2→3 の差分としてそのまま検出。戻すと drift 0 に戻ることも確認。柱3の見せ場が成立。"
     },
     {
       "type": "keep",
-      "scenarioId": null,
-      "author": "運営",
-      "comment": "cdk drift が desiredCount の手動変更をそのまま検出できた。応急処置の記録として振り返りの一次資料になる。"
-    },
-    {
-      "type": "problem",
-      "scenarioId": "scenario-02",
-      "author": "maehara",
-      "comment": "フェイルオーバー後のアプリ再接続に 10 分以上かかった。接続プールの maxLifetime / 再接続設定が未調整。"
-    },
-    {
-      "type": "problem",
       "scenarioId": "scenario-01",
-      "author": "参加者A",
-      "comment": "ECS コンソールとダッシュボードを行き来して情報が分散した。見る場所の優先順位を決めておきたい。"
+      "author": "リハーサル",
+      "comment": "タスク停止は約30秒で自己回復し canary 全 PASSED。停止条件アラームも OK のまま = 爆発半径の制御が機能。"
+    },
+    {
+      "type": "problem",
+      "scenarioId": "scenario-02",
+      "author": "リハーサル",
+      "comment": "Aurora フェイルオーバー (43秒) が canary にも 15 秒ポーリングにも映らなかった。SELECT 1 の読み取りプローブ + リクエスト毎の短命接続では速いフェイルオーバーを可視化できない。"
     },
     {
       "type": "try",
       "scenarioId": "scenario-02",
-      "author": "maehara",
-      "comment": "次回は aws:ecs:task-network-latency で「落ちないが遅い」障害を試す (SSM サイドカーの仕込みが前提)。"
+      "author": "リハーサル",
+      "comment": "app に書き込みエンドポイント (INSERT を打つ /write 等) を追加し canary から叩く。書き込み断としてフェイルオーバーを可視化する。"
     },
     {
       "type": "try",
       "scenarioId": null,
-      "author": "運営",
-      "comment": "検知時刻の記録係を決めておく。今回のタイムラインは記憶ベースの部分があった。"
+      "author": "リハーサル",
+      "comment": "FIS の experimentReportConfiguration が未設定だった。S3 + ダッシュボード指定で実験レポート PDF を出す (fis-experiment スキルのチェックリスト項目)。"
     }
   ]
 }
