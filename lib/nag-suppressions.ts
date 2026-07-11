@@ -27,6 +27,8 @@ export function suppressGamedayLabFindings(stack: Stack): void {
     },
     // --- ネットワーク / ログ (使い捨てのため運用系は非対象) ---
     { id: 'AwsSolutions-S1', reason: '学習ラボ: 使い捨てのため S3 サーバアクセスログは非対象' },
+    { id: 'AwsSolutions-SNS2', reason: '学習ラボ: 障害/復旧通知の SNS。機密でないため KMS 暗号化は非対象' },
+    { id: 'AwsSolutions-SNS3', reason: '学習ラボ: 障害/復旧通知の SNS。publisher は CloudWatch/Chatbot に限定されるため SSL 強制は非対象' },
     { id: 'AwsSolutions-VPC7', reason: '学習ラボ: 使い捨てのため VPC Flow Logs は非対象' },
     { id: 'AwsSolutions-ELB2', reason: '学習ラボ: 使い捨てのため ALB アクセスログは非対象' },
     {

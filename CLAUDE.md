@@ -59,6 +59,7 @@ lib/            スタック・コンストラクト定義
     target-app.ts       対象アプリ 3層 (ALB / Fargate / Aurora Serverless v2)
     observability.ts    Synthetics canary / CloudWatch アラーム・ダッシュボード
     fault-injection.ts  FIS 実験テンプレート
+    slack-notify.ts     障害/復旧の Slack 通知 (canary ヘルスアラーム→SNS→AWS Chatbot)
   legacy-app-stack.ts SPOF 出発点スタック (scenario-03。deploy ライフサイクルが異なるので別スタック)
   nag-suppressions.ts cdk-nag の意図的抑制 (理由付き)
 app/            対象アプリのソース (DB に ping する Node アプリ + Dockerfile)

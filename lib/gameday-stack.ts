@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 import { TargetApp } from './constructs/target-app';
 import { Observability } from './constructs/observability';
 import { FaultInjection } from './constructs/fault-injection';
+import { SlackNotify } from './constructs/slack-notify';
 
 /**
  * ミニ GameDay の本体スタック (3 本柱を 1 スタックに統合)。
@@ -34,6 +35,15 @@ export class GamedayStack extends cdk.Stack {
       targetTagKey: targetApp.targetTagKey,
       targetTagValue: targetApp.targetTagValue,
       databaseCluster: targetApp.databaseCluster,
+    });
+
+    // 4) Slack 通知: canary 成功率が下がる=障害発生 / 戻る=復旧 を Slack へ。
+    //    Slack ワークスペース/チャンネル ID は context で渡す (認可後に取得)。
+    //    未指定なら SNS までを作り Slack 連携はスキップ。
+    new SlackNotify(this, 'SlackNotify', {
+      canary: observability.canary,
+      slackWorkspaceId: this.node.tryGetContext('slackWorkspaceId'),
+      slackChannelId: this.node.tryGetContext('slackChannelId'),
     });
   }
 }

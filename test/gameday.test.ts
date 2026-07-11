@@ -40,13 +40,42 @@ test('データ層: Aurora MySQL Serverless v2 が作られる', () => {
   });
 });
 
-test('振り返り: canary は Playwright ランタイムを使い、停止条件アラームは 1 つ', () => {
+test('振り返り: canary は Playwright ランタイムを使う。アラームは停止条件+ヘルスの 2 つ', () => {
   const t = buildTemplate();
 
   t.hasResourceProperties('AWS::Synthetics::Canary', {
     RuntimeVersion: 'syn-nodejs-playwright-6.0',
   });
-  t.resourceCountIs('AWS::CloudWatch::Alarm', 1);
+  // 停止条件 (5xx) + Slack 通知用ヘルス (canary 成功率) の 2 アラーム
+  t.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+});
+
+test('Slack 通知: canary ヘルスアラームが ALARM/OK 両方を SNS に流す', () => {
+  const t = buildTemplate();
+
+  // canary 成功率 < 100 で発火するヘルスアラーム。ALARM/OK 両方が同じ SNS トピックを参照
+  const topicRef = Match.arrayWith([{ Ref: Match.stringLikeRegexp('SlackNotifyIncidentTopic') }]);
+  t.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: 'gameday-canary-health',
+    ComparisonOperator: 'LessThanThreshold',
+    Threshold: 100,
+    AlarmActions: topicRef,
+    OKActions: topicRef,
+  });
+  t.resourceCountIs('AWS::SNS::Topic', 1);
+  // context 未指定なので Chatbot は作られない (他環境でも deploy 可)
+  t.resourceCountIs('AWS::Chatbot::SlackChannelConfiguration', 0);
+});
+
+test('Slack 通知: context で workspace/channel を渡すと Chatbot が作られる', () => {
+  const app = new cdk.App({
+    context: { slackWorkspaceId: 'T0BA0DS8UH4', slackChannelId: 'C0BGHTVG5FV' },
+  });
+  const t = Template.fromStack(new GamedayStack(app, 'GameDaySlack'));
+  t.hasResourceProperties('AWS::Chatbot::SlackChannelConfiguration', {
+    SlackWorkspaceId: 'T0BA0DS8UH4',
+    SlackChannelId: 'C0BGHTVG5FV',
+  });
 });
 
 test('障害注入1: FIS は ECS タスクを 1 つ停止し、停止条件にアラームを使う', () => {
