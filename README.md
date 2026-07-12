@@ -62,6 +62,15 @@ aws fis get-experiment --id <experiment-id>   # 状態・タイムライン
 #    実験ログは CloudWatch Logs /gameday/fis-experiments に残る (振り返りの素材)
 ```
 
+**障害開始を遅らせる**: デプロイ時に `-c faultDelayMinutes=5` を渡すと、各実験の先頭に
+`aws:fis:wait` (5 分) が入る。`start-experiment` を叩くと実験は「実行中(待機)」になり、
+**5 分後に障害が発生**する (デプロイ直後に叩けば実質デプロイ+5分)。待機は障害の前なので
+停止条件は誤発火しない。0/未指定なら即時 (既定)。
+
+```bash
+npx cdk deploy GameDay -c faultDelayMinutes=5   # 開始 5 分後に障害
+```
+
 ### フェーズ4: 復旧対応(参加者)
 
 **参加者向けルール** — 復旧の直し方は**自由**。この選択の差が振り返りで可視化されるのが今回の肝:

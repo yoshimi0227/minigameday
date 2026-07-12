@@ -23,6 +23,12 @@ export interface FaultInjectionProps {
   readonly targetTagValue: string;
   /** フェイルオーバー対象の Aurora クラスター */
   readonly databaseCluster: rds.IDatabaseCluster;
+  /**
+   * 障害注入を start-experiment から何分遅らせるか (aws:fis:wait を先頭に挿入)。
+   * 0 / 未指定なら即時。1〜720 分。start-experiment をデプロイ直後に叩けば
+   * 「デプロイ + N 分後に障害」になる。待機は障害の前なので停止条件は誤発火しない。
+   */
+  readonly faultDelayMinutes?: number;
 }
 
 /**
@@ -39,6 +45,28 @@ export class FaultInjection extends Construct {
     const stopCondition: fis.CfnExperimentTemplate.ExperimentTemplateStopConditionProperty = {
       source: 'aws:cloudwatch:alarm',
       value: stopAlarm.alarmArn,
+    };
+
+    // 障害開始の遅延 (aws:fis:wait を先頭に挿入)。1〜720 分。0/未指定なら即時。
+    const delayMin = props.faultDelayMinutes ?? 0;
+    if (delayMin !== 0 && (!Number.isInteger(delayMin) || delayMin < 1 || delayMin > 720)) {
+      throw new Error(`faultDelayMinutes は 1〜720 の整数にする (指定値: ${delayMin})`);
+    }
+    // 障害アクションの手前に待機を挟んだ actions を作る。待機は「障害の前」なので、
+    // 待機中は何も壊れておらず 5xx 停止条件が誤発火しない (後ろに足すのとは別)。
+    const withDelay = (
+      faultName: string,
+      faultAction: fis.CfnExperimentTemplate.ExperimentTemplateActionProperty,
+    ): Record<string, fis.CfnExperimentTemplate.ExperimentTemplateActionProperty> => {
+      if (delayMin === 0) return { [faultName]: faultAction };
+      return {
+        Wait: {
+          actionId: 'aws:fis:wait',
+          description: `障害開始を ${delayMin} 分遅らせる`,
+          parameters: { duration: `PT${delayMin}M` },
+        },
+        [faultName]: { ...faultAction, startAfter: ['Wait'] },
+      };
     };
 
     // 実験ログの配信先。実験タイムライン・アクション詳細を CloudWatch Logs に残し、
@@ -87,13 +115,11 @@ export class FaultInjection extends Construct {
           resourceTags: { [targetTagKey]: targetTagValue },
         },
       },
-      actions: {
-        StopTask: {
-          actionId: 'aws:ecs:stop-task',
-          description: 'Stop one targeted Fargate task',
-          targets: { Tasks: 'Tasks' },
-        },
-      },
+      actions: withDelay('StopTask', {
+        actionId: 'aws:ecs:stop-task',
+        description: 'Stop one targeted Fargate task',
+        targets: { Tasks: 'Tasks' },
+      }),
     });
 
     // ===== シナリオ2: Aurora フェイルオーバー =====
@@ -127,13 +153,11 @@ export class FaultInjection extends Construct {
           resourceArns: [databaseCluster.clusterArn],
         },
       },
-      actions: {
-        Failover: {
-          actionId: 'aws:rds:failover-db-cluster',
-          description: 'Force an Aurora cluster failover',
-          targets: { Clusters: 'Clusters' },
-        },
-      },
+      actions: withDelay('Failover', {
+        actionId: 'aws:rds:failover-db-cluster',
+        description: 'Force an Aurora cluster failover',
+        targets: { Clusters: 'Clusters' },
+      }),
     });
 
     new cdk.CfnOutput(this, 'StopTaskTemplateId', {

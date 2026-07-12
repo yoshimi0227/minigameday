@@ -30,11 +30,14 @@ export class GamedayStack extends cdk.Stack {
     });
 
     // 3) 障害注入: FIS 実験テンプレート (停止条件 = 振り返りアラーム)
+    //    -c faultDelayMinutes=5 で「start-experiment から 5 分後に障害」にできる (aws:fis:wait)。
+    const faultDelayRaw = this.node.tryGetContext('faultDelayMinutes');
     new FaultInjection(this, 'FaultInjection', {
       stopAlarm: observability.stopAlarm,
       targetTagKey: targetApp.targetTagKey,
       targetTagValue: targetApp.targetTagValue,
       databaseCluster: targetApp.databaseCluster,
+      faultDelayMinutes: faultDelayRaw != null ? Number(faultDelayRaw) : undefined,
     });
 
     // 4) Slack 通知: canary 成功率が下がる=障害発生 / 戻る=復旧 を Slack へ。
