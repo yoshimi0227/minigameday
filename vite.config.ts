@@ -8,6 +8,8 @@ export default defineConfig({
     // @vitest-environment ディレクティブで指定)
     include: ['test/**/*.test.ts', 'dashboard/src/**/*.test.tsx'],
     environment: 'node',
+    // CDK 合成は Lambda を esbuild でバンドルする (NodejsFunction) ため既定 5s を超え得る。
+    testTimeout: 30000,
   },
   lint: {
     ignorePatterns: ['cdk.out/**', '*.d.ts', 'dashboard/dist/**'],

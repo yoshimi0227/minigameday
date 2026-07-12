@@ -4,6 +4,7 @@ import { TargetApp } from './constructs/target-app';
 import { Observability } from './constructs/observability';
 import { FaultInjection } from './constructs/fault-injection';
 import { SlackNotify } from './constructs/slack-notify';
+import { ScoreEscalation } from './constructs/score-escalation';
 
 /**
  * ミニ GameDay の本体スタック (3 本柱を 1 スタックに統合)。
@@ -32,12 +33,27 @@ export class GamedayStack extends cdk.Stack {
     // 3) 障害注入: FIS 実験テンプレート (停止条件 = 振り返りアラーム)
     //    -c faultDelayMinutes=5 で「start-experiment から 5 分後に障害」にできる (aws:fis:wait)。
     const faultDelayRaw = this.node.tryGetContext('faultDelayMinutes');
-    new FaultInjection(this, 'FaultInjection', {
+    const faultInjection = new FaultInjection(this, 'FaultInjection', {
       stopAlarm: observability.stopAlarm,
       targetTagKey: targetApp.targetTagKey,
       targetTagValue: targetApp.targetTagValue,
       databaseCluster: targetApp.databaseCluster,
       faultDelayMinutes: faultDelayRaw != null ? Number(faultDelayRaw) : undefined,
+    });
+
+    // 3b) スコアエスカレーション: 実効スコアが閾値に達したら「次の障害」を自動発火。
+    //     スコアは DynamoDB に持ち、Streams → Lambda → FIS start-experiment (AWS ネイティブ)。
+    //     既定は「スコア 100 到達で Aurora フェイルオーバー」。-c escalateAtScore=N で閾値可変。
+    const escalateAtScore = Number(this.node.tryGetContext('escalateAtScore') ?? 100);
+    new ScoreEscalation(this, 'ScoreEscalation', {
+      triggers: [
+        {
+          id: 'failover',
+          atScore: escalateAtScore,
+          experimentTemplateId: faultInjection.failoverDbTemplateId,
+          label: 'Aurora フェイルオーバー (スコア到達エスカレーション)',
+        },
+      ],
     });
 
     // 4) Slack 通知: canary 成功率が下がる=障害発生 / 戻る=復旧 を Slack へ。

@@ -4,7 +4,7 @@ import ScoreTable from './ScoreTable';
 import TimeChart, { ChartLegend } from './TimeChart';
 import KptBoard from './KptBoard';
 import HintSummary from './HintSummary';
-import type { GamedayData } from './types';
+import { effectiveScore, type GamedayData } from './types';
 
 const POLL_MS = 3000; // gameday.json を 3 秒ごとに再取得してリアルタイム反映
 const HINTS_STORAGE_KEY = 'gameday-revealed-hints';
@@ -63,6 +63,28 @@ export default function App() {
   useEffect(() => {
     if (data) document.title = `${data.event.title} — ダッシュボード`;
   }, [data]);
+
+  // 合計実効スコアを DynamoDB へ同期する (dev サーバ /api/score 経由)。
+  // 閾値に達すると DynamoDB Streams → Lambda が「次の障害」を自動発火する (AWS 側)。
+  // best-effort: エンドポイント不在 (静的ビルド) や未認証でも画面は動く。
+  useEffect(() => {
+    if (!data) return;
+    const revealedIds = new Set<string>([
+      ...(data.hintReveals ?? []).map((r) => r.hintId),
+      ...localReveals,
+    ]);
+    const total = data.injects.reduce(
+      (sum, i) => sum + (effectiveScore(i, revealedIds) ?? 0),
+      0,
+    );
+    void fetch('api/score', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ total }),
+    }).catch(() => {
+      /* 同期は best-effort */
+    });
+  }, [data, localReveals]);
 
   const reveal = useCallback((injectId: string, hintId: string) => {
     // 1) 即時反映 + フォールバック用に localStorage へ

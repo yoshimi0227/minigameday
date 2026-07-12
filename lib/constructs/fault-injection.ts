@@ -37,6 +37,11 @@ export interface FaultInjectionProps {
  * - シナリオ2: Aurora をフェイルオーバー (データ層の回復)
  */
 export class FaultInjection extends Construct {
+  /** シナリオ1 (Fargate タスク停止) の FIS 実験テンプレート ID */
+  public readonly stopTaskTemplateId: string;
+  /** シナリオ2 (Aurora フェイルオーバー) の FIS 実験テンプレート ID */
+  public readonly failoverDbTemplateId: string;
+
   constructor(scope: Construct, id: string, props: FaultInjectionProps) {
     super(scope, id);
 
@@ -159,6 +164,9 @@ export class FaultInjection extends Construct {
         targets: { Clusters: 'Clusters' },
       }),
     });
+
+    this.stopTaskTemplateId = stopTaskTemplate.attrId;
+    this.failoverDbTemplateId = failoverDbTemplate.attrId;
 
     new cdk.CfnOutput(this, 'StopTaskTemplateId', {
       value: stopTaskTemplate.attrId,

@@ -2,6 +2,7 @@ import { test, expect } from 'vitest';
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { GamedayStack } from '../lib/gameday-stack';
+import { ScoreEscalation } from '../lib/constructs/score-escalation';
 
 /**
  * Fine-grained assertions。
@@ -9,10 +10,16 @@ import { GamedayStack } from '../lib/gameday-stack';
  * 停止条件 / Playwright canary) が崩れていないことを守る。
  * 3 本柱は GamedayStack 1 つに統合されたので、1 テンプレートに対して検証する。
  */
+// 既定 context の合成は Lambda を esbuild でバンドルするため重い。Template は読み取り専用の
+// クエリオブジェクトなので、既定ビルドは 1 回だけ合成して共有する (テスト間で安全)。
+let defaultTemplate: Template | undefined;
 function buildTemplate(): Template {
-  const app = new cdk.App();
-  const stack = new GamedayStack(app, 'GameDay');
-  return Template.fromStack(stack);
+  if (!defaultTemplate) {
+    const app = new cdk.App();
+    const stack = new GamedayStack(app, 'GameDay');
+    defaultTemplate = Template.fromStack(stack);
+  }
+  return defaultTemplate;
 }
 
 test('対象アプリ: インターネット向け ALB の背後で Fargate が 2 タスク動く', () => {
@@ -159,6 +166,56 @@ test('障害遅延: デフォルト (context 無し) は wait を入れない', 
 test('障害遅延: 範囲外 (720 分超) は synth 時に弾く', () => {
   const app = new cdk.App({ context: { faultDelayMinutes: 1000 } });
   expect(() => new GamedayStack(app, 'GameDayBadDelay')).toThrow(/faultDelayMinutes/);
+});
+
+test('スコアエスカレーション: DynamoDB(Streams) → Lambda → FIS 発火の配線がある', () => {
+  const t = buildTemplate();
+
+  // スコア置き場。TableV2 は GlobalTable として合成される。Streams(NEW_IMAGE)が Lambda を駆動
+  t.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'gameday-score',
+    StreamSpecification: { StreamViewType: 'NEW_IMAGE' },
+  });
+  // エスカレーション Lambda は最新ランタイムで TRIGGERS を持つ
+  t.hasResourceProperties('AWS::Lambda::Function', {
+    Runtime: 'nodejs24.x',
+    Environment: Match.objectLike({ Variables: Match.objectLike({ TRIGGERS: Match.anyValue() }) }),
+  });
+  // イベントソースは SCORE アイテムの INSERT/MODIFY だけに絞る (無駄起動と再帰を防ぐ)
+  t.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+    FilterCriteria: {
+      Filters: Match.arrayWith([{ Pattern: Match.stringLikeRegexp('SCORE') }]),
+    },
+  });
+  // Lambda ロールに FIS 実験を開始する権限
+  t.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: Match.objectLike({
+      Statement: Match.arrayWith([Match.objectLike({ Action: 'fis:StartExperiment' })]),
+    }),
+  });
+});
+
+test('スコアエスカレーション: 閾値と実験IDが Lambda 環境変数 (TRIGGERS) に入る', () => {
+  // 実 ID はトークンになり CFN 上 Fn::Join に化けるので、単体では素の文字列で検証する
+  const app = new cdk.App();
+  const stack = new cdk.Stack(app, 'EscOnly');
+  new ScoreEscalation(stack, 'Esc', {
+    triggers: [{ id: 't1', atScore: 250, experimentTemplateId: 'EXTexample', label: 'x' }],
+  });
+  const t = Template.fromStack(stack);
+  t.hasResourceProperties('AWS::Lambda::Function', {
+    Environment: Match.objectLike({
+      Variables: Match.objectLike({
+        TRIGGERS: Match.stringLikeRegexp('"atScore":250.*"experimentTemplateId":"EXTexample"'),
+      }),
+    }),
+  });
+});
+
+test('スコアエスカレーション: trigger 空は設定ミスとして弾く', () => {
+  const app = new cdk.App();
+  const stack = new cdk.Stack(app, 'EscEmpty');
+  expect(() => new ScoreEscalation(stack, 'Esc', { triggers: [] })).toThrow(/trigger/);
 });
 
 test('統合の証明: 本体は 1 スタックで、cross-stack Export を作らない', () => {
