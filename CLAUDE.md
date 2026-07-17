@@ -58,10 +58,13 @@ lib/            スタック・コンストラクト定義
   constructs/
     target-app.ts       対象アプリ 3層 (ALB / Fargate / Aurora Serverless v2)
     observability.ts    Synthetics canary / CloudWatch アラーム・ダッシュボード
-    fault-injection.ts  FIS 実験テンプレート
+    fault-injection.ts  FIS 実験テンプレート (faultDelayMinutes は "5-15" 範囲 = synth 時乱数に対応)
     slack-notify.ts     障害/復旧の Slack 通知 (canary ヘルスアラーム→SNS→AWS Chatbot)
+    score-escalation.ts スコア閾値到達で「次の障害」を自動発火 (DynamoDB Streams→Lambda→FIS)
+    game-events.ts      自動採点のイベント記録 (アラーム遷移 + FIS 状態遷移→EventBridge→Lambda→DynamoDB)
   legacy-app-stack.ts SPOF 出発点スタック (scenario-03。deploy ライフサイクルが異なるので別スタック)
   nag-suppressions.ts cdk-nag の意図的抑制 (理由付き)
+lambda/         Lambda ソース (score-escalator / game-events。ESM .mjs、NodejsFunction でバンドル)
 app/            対象アプリのソース (DB に ping する Node アプリ + Dockerfile)
 scenarios/      AI が生成した GameDay シナリオ (markdown, frontmatter 付き)
 retrospectives/ 振り返りレポート (YYYY-MM-DD-<シナリオID>.md)
@@ -80,6 +83,7 @@ test/           CDK ユニットテスト
 - コードを書いたら `npm run lint` (Oxlint + awscdk プラグイン) を通す。公開プロパティ・Props はコンストラクト具象型でなくインターフェース型 (`ICluster` 等) で公開する。
 - **スタックは分割しない。** 本体は `GamedayStack` 1 つで、関心分離は `lib/constructs/` 配下の Construct 分割で行う (cross-stack Strong Reference を避ける。`aws-cdk-development` スキル鉄則1・2)。deploy ライフサイクルが異なる `GameDay-Legacy` (scenario-03) だけが例外。
 - `app/` (対象アプリ) と `canaries/` (canary スクリプト) は**意図的に素の JS のまま**にする (TS 化しない)。実行環境が JS を直接実行し「デプロイ物 = ソース」であることが振り返り・デモで価値になるため (特に Synthetics コンソールはスクリプトをそのまま表示する)。
+- **採点・イベント導出ロジックは `dashboard/src/scoring.ts` に集約する** (React 非依存の純関数)。UI (App/Tiles/ScoreTable) と dev サーバ (`dashboard/vite.config.ts` の gameEventsSync) の両方がここを import する。採点の優先順位は `scoreOverride` > 自動採点 (検知/復旧/伝達) > 手動 `score`。gameday.json への書き込みは vite.config.ts の `updateGamedayJson` (直列化キュー) を必ず通す。
 - 破壊的操作は GameDay の本旨だが、**対象スタックの外**に影響を出さない。リソースは識別しやすいタグ・命名 (`gameday-*`) を付ける。
 - `cdk deploy` は自動許可、`cdk destroy` / `cdk bootstrap` は都度確認。
 - コスト注意: Fargate / RDS / NAT Gateway は起動しっぱなしで課金される。GameDay 終了後は `cdk destroy` する前提で組む。FIS の実験レポートも 1 通ごとに課金される。
@@ -90,7 +94,10 @@ test/           CDK ユニットテスト
 - **CDK の Playwright ランタイム定数**: `synthetics.Runtime.SYNTHETICS_NODEJS_PLAYWRIGHT_*`(aws-cdk-lib 2.258.1 では `6_0` が最新定数)。現在このプロジェクトは 6.0 を使用。定数未提供の新ランタイムは `new synthetics.Runtime('syn-nodejs-playwright-7.1', synthetics.RuntimeFamily.NODEJS)` で指定できる。
 - **Vite+ / Oxlint の前提**: ツールチェーンは Node.js >= 22 が必要 (この環境は Node 24.18 / npm 11)。Node が古いと npm が optional 依存のネイティブバイナリを**黙ってスキップ**し「Cannot find native binding」で落ちる。corsa-oxlint (型認識リント) は Windows で JS シムを spawn する不具合があり、`vite.config.ts` の `settings.corsaOxlint.corsa.executable` で `tsgo.exe` を明示している。
 - **FIS は L1 のみ**: `aws-cdk-lib/aws-fis` は `CfnExperimentTemplate` だけ。L2 を探さない。アクション仕様の検証メモは `.claude/skills/fis-experiment/references/fis-actions.md`。
+- **NodejsFunction のバンドルは CJS 出力にする (2026-07-17 実機で確認)**: `format: ESM` + `externalModules: []` で CJS の AWS SDK を同梱すると Lambda が `Dynamic require of "node:https" is not supported` で Init クラッシュする。定石の createRequire banner は **Windows のローカルバンドルでシェルにダブルクォートを剥がされて SyntaxError** になるため使えない。`OutputFormat.CJS` なら両問題が消える (.mjs ソースのままで可。トップレベル await を使う場合のみ再考)。
+- **tags 付き `fis:StartExperiment` には `fis:TagResource` も要る (2026-07-17 実機で確認)**: 開始時タグは新規実験へのタグ付けとして別権限が要求され、無いと AccessDenied。ユニットテストでは捕まらない — 「AI に書かせて実機で一巡」の検証ループを省略しない。
 - **`cdk drift` と `cdk diff` は別物**: drift は実リソース vs スタックの期待状態(振り返りで使うのはこっち)、diff はローカルコード vs デプロイ済みテンプレート。
+- **AWS 構成図の生成 (ハンドアウト/登壇資料用) は `aws-architecture-diagram` スキル** (Claude Code プラグイン `deploy-on-aws@agent-plugins-for-aws`、user スコープ導入済み 2026-07-15)。AWS4 公式アイコンの draw.io XML を生成し、PostToolUse フックが自動検証、`drawio_url.py` で diagrams.net プレビュー URL を出せる。前提: `python3` + `defusedxml` (導入済み)。PNG/SVG 書き出しは draw.io desktop の CLI を使う。**旧 AWS Diagram MCP (`awslabs.aws-diagram-mcp-server`) は全バージョン yank 済みの非推奨のため使わない** (このスキルが公式後継)。ダッシュボードの構成図は aws-icons による React 描画 (`dashboard/src/Architecture.tsx`) で、プラグインには依存しない — 役割分担: 画面 = React 描画、配布物 = このスキル。
 
 ## よく使うコマンド
 
