@@ -235,7 +235,8 @@
       "recoveredAt": "2026-07-17T12:23:49Z",
       "recoveryMinutes": 0.4,
       "score": 90,
-      "notes": "R1 は「壊れても待てば戻る」。復旧 40 点は待てば入り、検知の速さと伝達で差がつく。"
+      "notes": "R1 は「壊れても待てば戻る」。復旧 40 点は待てば入り、検知の速さと伝達で差がつく。",
+      "detectionMinutes": 1
     },
     {
       "id": "r2-scale",
@@ -269,8 +270,8 @@
       "detectionMinutes": 0.4,
       "notes": "自己回復しない障害の実証。検知 0.4 分 / 復旧 3 分は「人が戻す」対応時間そのもの。伝達: 宣言→操作は速いが記録は事後 → 12/20。",
       "commsScore": 12,
-      "recoveredAt": "2026-07-17T14:06:07Z",
-      "recoveryMinutes": 14.3
+      "recoveredAt": "2026-07-17T13:54:49Z",
+      "recoveryMinutes": 3
     }
   ],
   "feedback": [
@@ -361,22 +362,6 @@
       "alarmName": "gameday-canary-health",
       "state": "OK",
       "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 13:53:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
-    },
-    {
-      "key": "EVENT#2026-07-17T14:03:07Z#e7822e36-1b68-4b41-f05c-7fd8d4ec7727",
-      "type": "alarm",
-      "at": "2026-07-17T14:03:07Z",
-      "alarmName": "gameday-legacy-canary-health",
-      "state": "ALARM",
-      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [0.0 (17/07/26 14:02:00)] was less than the threshold (100.0) (minimum 1 datapoint for OK -> ALARM transition)."
-    },
-    {
-      "key": "EVENT#2026-07-17T14:06:07Z#36338478-c37b-b5c7-68fd-81b9ec5ca0cd",
-      "type": "alarm",
-      "at": "2026-07-17T14:06:07Z",
-      "alarmName": "gameday-legacy-canary-health",
-      "state": "OK",
-      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 14:05:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
     }
   ],
   "review": {
