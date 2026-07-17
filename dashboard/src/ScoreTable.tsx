@@ -1,5 +1,12 @@
-import type { Inject, InjectStatus } from './types';
-import { effectiveScore, fmtMinutes, hintPenalty } from './types';
+import type { Inject, InjectStatus, ScoringConfig } from './types';
+import { fmtMinutes } from './types';
+import {
+  DEFAULT_SCORING,
+  autoScoreBreakdown,
+  effectiveScore,
+  hintPenalty,
+  resolveScore,
+} from './scoring';
 import Hints from './Hints';
 
 const STATUS: Record<InjectStatus, { label: string; icon: string; color: string }> = {
@@ -7,6 +14,10 @@ const STATUS: Record<InjectStatus, { label: string; icon: string; color: string 
   partial: { label: '一部達成', icon: '▲', color: 'var(--status-warning)' },
   failed: { label: '失敗', icon: '✕', color: 'var(--status-critical)' },
   pending: { label: '進行中', icon: '…', color: 'var(--text-muted)' },
+  // ライブ状態 (gameEventsSync が導出)
+  armed: { label: '実験進行中', icon: '⏱', color: 'var(--text-muted)' },
+  impacted: { label: '影響発生中', icon: '⚠', color: 'var(--status-critical)' },
+  recovered: { label: '復旧済み', icon: '✓', color: 'var(--status-good)' },
 };
 
 function StatusChip({ status }: { status?: InjectStatus }) {
@@ -23,20 +34,37 @@ function Minutes({ value }: { value?: number }) {
   return <>{typeof value === 'number' ? `${fmtMinutes(value)} 分` : '—'}</>;
 }
 
-function ScoreCell({ inject, revealed }: { inject: Inject; revealed: ReadonlySet<string> }) {
-  if (typeof inject.score !== 'number' || !inject.maxScore) {
+function ScoreCell({
+  inject,
+  revealed,
+  scoring,
+}: {
+  inject: Inject;
+  revealed: ReadonlySet<string>;
+  scoring: ScoringConfig;
+}) {
+  const base = resolveScore(inject, scoring);
+  if (base === undefined || !inject.maxScore) {
     return <span className="score-max">未採点</span>;
   }
   const penalty = hintPenalty(inject, revealed);
-  const eff = effectiveScore(inject, revealed) ?? inject.score;
+  const eff = effectiveScore(inject, revealed, scoring) ?? base;
   const pct = Math.max(0, Math.min(100, (eff / inject.maxScore) * 100));
+  // 自動採点のときは内訳を小書きで示す (scoreOverride 時は手動裁定なので出さない)
+  const breakdown =
+    typeof inject.scoreOverride === 'number' ? undefined : autoScoreBreakdown(inject, scoring);
   return (
     <>
       <div>
         <span className="score-num">{eff}</span>
         <span className="score-max">{` / ${inject.maxScore}`}</span>
-        {penalty > 0 && <span className="score-penalty">{`（${inject.score} − ${penalty}pt）`}</span>}
+        {penalty > 0 && <span className="score-penalty">{`（${base} − ${penalty}pt）`}</span>}
       </div>
+      {breakdown && (
+        <div className="score-breakdown">
+          {`検知 ${breakdown.detection}/${scoring.detection.maxPoints} · 復旧 ${breakdown.recovery}/${scoring.recovery.maxPoints} · 伝達 ${breakdown.comms}/${scoring.commsMaxPoints}`}
+        </div>
+      )}
       <div className="meter">
         <span style={{ width: `${pct}%` }} />
       </div>
@@ -48,10 +76,14 @@ export default function ScoreTable({
   injects,
   revealed,
   onReveal,
+  onAck,
+  scoring = DEFAULT_SCORING,
 }: {
   injects: Inject[];
   revealed: ReadonlySet<string>;
   onReveal: (injectId: string, hintId: string) => void;
+  onAck?: (injectId: string) => void;
+  scoring?: ScoringConfig;
 }) {
   return (
     <div className="table-wrap">
@@ -101,11 +133,22 @@ export default function ScoreTable({
                   )}
                   <Hints inject={inject} revealed={revealed} onReveal={onReveal} />
                 </td>
-                <td><StatusChip status={inject.status} /></td>
+                <td>
+                  <StatusChip status={inject.status} />
+                  {onAck && inject.impactStartAt && !inject.ackAt && (
+                    <button
+                      type="button"
+                      className="ack-button small"
+                      onClick={() => onAck(inject.id)}
+                    >
+                      検知宣言
+                    </button>
+                  )}
+                </td>
                 <td className="num"><Minutes value={inject.detectionMinutes} /></td>
                 <td className="num"><Minutes value={inject.recoveryMinutes} /></td>
                 <td className="score-cell">
-                  <ScoreCell inject={inject} revealed={revealed} />
+                  <ScoreCell inject={inject} revealed={revealed} scoring={scoring} />
                 </td>
               </tr>
             );

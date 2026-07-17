@@ -1,5 +1,6 @@
-import type { Inject } from './types';
-import { effectiveScore, fmtMinutes, hintPenalty } from './types';
+import type { Inject, ScoringConfig } from './types';
+import { fmtMinutes } from './types';
+import { DEFAULT_SCORING, effectiveScore, hintPenalty, resolveScore } from './scoring';
 
 function average(injects: Inject[], key: 'detectionMinutes' | 'recoveryMinutes'): number | null {
   const values = injects.map((i) => i[key]).filter((v): v is number => typeof v === 'number');
@@ -7,19 +8,24 @@ function average(injects: Inject[], key: 'detectionMinutes' | 'recoveryMinutes')
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+/** 「消化済み」= 確定またはひと山越えた状態。進行中 (pending/armed/impacted) は含めない */
+const DONE_STATUSES = new Set(['success', 'partial', 'failed', 'recovered']);
+
 export default function Tiles({
   injects,
   revealed,
+  scoring = DEFAULT_SCORING,
 }: {
   injects: Inject[];
   revealed: ReadonlySet<string>;
+  scoring?: ScoringConfig;
 }) {
-  const scored = injects.filter((i) => typeof i.score === 'number');
-  // 実効スコア = 獲得 − ヒント消費。総合はその合計
-  const totalScore = scored.reduce((sum, i) => sum + (effectiveScore(i, revealed) ?? 0), 0);
+  const scored = injects.filter((i) => resolveScore(i, scoring) !== undefined);
+  // 実効スコア = 素点 (自動採点 or 手動) − ヒント消費。総合はその合計
+  const totalScore = scored.reduce((sum, i) => sum + (effectiveScore(i, revealed, scoring) ?? 0), 0);
   const totalMax = scored.reduce((sum, i) => sum + (i.maxScore ?? 0), 0);
   const totalPenalty = injects.reduce((sum, i) => sum + hintPenalty(i, revealed), 0);
-  const done = injects.filter((i) => i.status && i.status !== 'pending').length;
+  const done = injects.filter((i) => i.status && DONE_STATUSES.has(i.status)).length;
   const avgDetection = average(injects, 'detectionMinutes');
   const avgRecovery = average(injects, 'recoveryMinutes');
 

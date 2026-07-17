@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "aws-cdk-lib": "^2.258.1",
+    "aws-icons": "^3.3.0",
     "constructs": "^10.5.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

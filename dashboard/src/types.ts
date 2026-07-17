@@ -7,7 +7,16 @@ export interface GamedayEvent {
   note?: string;
 }
 
-export type InjectStatus = 'success' | 'partial' | 'failed' | 'pending';
+export type InjectStatus =
+  // 手動の確定値 (運営/振り返りが記入。自動導出はこれを上書きしない)
+  | 'success'
+  | 'partial'
+  | 'failed'
+  | 'pending'
+  // ライブ状態 (gameEventsSync が events[] から導出する)
+  | 'armed' // 実験開始済み (aws:fis:wait 中かも。障害はいつ来るか分からない)
+  | 'impacted' // canary アラーム ALARM = 影響発生中
+  | 'recovered'; // canary アラーム OK = 復旧済み
 
 /** 段階ヒント。ポイントを消費して開示する。cost が消費点。 */
 export interface Hint {
@@ -31,19 +40,97 @@ export interface Inject {
   maxScore?: number;
   notes?: string;
   hints?: Hint[];
+  /** FIS 実験テンプレート ID。イベントとの突き合わせキー (運営がセットアップ時に記入) */
+  experimentTemplateId?: string;
+  /**
+   * 以下 4 つは gameEventsSync が events[] から導出して書く (手編集しない)。
+   * 例外: FIS イベントの取り逃し (best effort 配信) 時は experimentStartedAt を
+   * 手書きすれば同じに動く (導出はイベント材料が無いフィールドを触らない)。
+   */
+  experimentId?: string; // 実際に走った FIS 実験 ID
+  experimentStartedAt?: string; // ISO8601 — FIS running (= armed。障害はまだ)
+  impactStartAt?: string; // ISO8601 — canary アラーム ALARM (影響開始)
+  recoveredAt?: string; // ISO8601 — canary アラーム OK (最後の ALARM より後の最後の OK)
+  /** 検知宣言の時刻 (/api/ack がサーバ時刻で付与。最初の宣言だけ有効) */
+  ackAt?: string;
+  /** 伝達・記録の点数 0〜20 (手動。運営がルーブリックで判断して記入) */
+  commsScore?: number;
+  /** 最終的な手動オーバーライド。これがあれば自動採点・手動 score より優先 */
+  scoreOverride?: number;
 }
 
-/** 開示済みヒントの消費ポイント合計 */
-export function hintPenalty(inject: Inject, revealed: ReadonlySet<string>): number {
-  return (inject.hints ?? [])
-    .filter((h) => revealed.has(h.id))
-    .reduce((sum, h) => sum + (h.cost ?? 0), 0);
+/** 採点カーブ: fullWithinMinutes 以内 = 満点、zeroAfterMinutes 以降 = 0、間は線形減衰 */
+export interface ScoringCurve {
+  maxPoints: number;
+  fullWithinMinutes: number;
+  zeroAfterMinutes: number;
 }
 
-/** 実効スコア = 獲得スコア − ヒント消費 (0 下限)。未採点は undefined */
-export function effectiveScore(inject: Inject, revealed: ReadonlySet<string>): number | undefined {
-  if (typeof inject.score !== 'number') return undefined;
-  return Math.max(0, inject.score - hintPenalty(inject, revealed));
+/** 自動採点の設定 (gameday.json の scoring セクション。無ければ DEFAULT_SCORING) */
+export interface ScoringConfig {
+  detection: ScoringCurve; // 検知: impactStartAt → ackAt (検知宣言) の速さ
+  recovery: ScoringCurve; // 復旧: impactStartAt → recoveredAt (MTTR)
+  commsMaxPoints: number; // 伝達・記録の満点 (commsScore の上限。手動採点)
+}
+
+/** ゲームイベント (GameEvents Lambda が DynamoDB に記録 → dev サーバが同期。タイムライン素材) */
+export interface GameEvent {
+  key: string; // DynamoDB の pk (重複排除キー)。ack は 'ACK#<injectId>'
+  type: 'experiment' | 'alarm' | 'ack';
+  at: string; // ISO8601 (EventBridge の time / dev サーバ時刻)
+  // type: 'experiment'
+  experimentId?: string;
+  experimentTemplateId?: string;
+  status?: string; // running | completed | stopped | failed
+  // type: 'alarm'
+  alarmName?: string;
+  state?: 'ALARM' | 'OK';
+  reason?: string;
+  // type: 'ack'
+  injectId?: string;
+}
+
+/** インジェクト 1 件ぶんの振り返り講評 (gameday-retrospective スキルが生成) */
+export interface ReviewInject {
+  injectId: string;
+  headline: string; // 一言の見出し (例: "静観の判断が正解")
+  commentary: string; // 講評本文 (タイムライン・ヒント消費・drift を織り込む)
+  wentWell?: string[];
+  toImprove?: string[];
+}
+
+/** ゲーム終了後の振り返りレビュー。存在するときだけダッシュボードに表示される */
+export interface Review {
+  generatedAt: string; // ISO8601
+  overall: string; // 総評
+  reportPath?: string; // retrospectives/ の詳細レポートへのパス
+  injects: ReviewInject[];
+}
+
+/** 構成図のノード (AWS リソース 1 つ分) */
+export interface SystemNode {
+  service: string; // サービス名 (例: "ALB" / "ECS Fargate")
+  icon?: string; // AWS 公式アイコンのキー (awsIcons.ts の AWS_ICONS)。無い/不明ならアイコン無しで描画
+  label?: string; // 一言補足 (例: "internet-facing / HTTP:80")
+  count?: number; // 台数。2 以上で "×N" バッジを表示
+}
+
+/** 構成図の層 (サブネット / リージョン等のまとまり。上から下へ矢印でつなぐ) */
+export interface SystemTier {
+  name: string; // 層の名前 (例: "アプリ層 — app サブネット")
+  icon?: string; // 層のグループアイコンのキー (例: "public-subnet" / "region")。任意
+  nodes: SystemNode[];
+  note?: string; // 層への補足 (任意)
+}
+
+/** GameDay のお題システム。scenarioIds で scenarios/ のシナリオと紐づく */
+export interface TargetSystem {
+  id: string;
+  name: string; // タブに出る短い名前
+  summary: string; // システムについての軽い補足 (何をするアプリか)
+  scenarioIds: string[]; // このシステムを対象とするシナリオ id
+  tiers: SystemTier[];
+  notes?: string[]; // 箇条書きの補足 (観測手段・ハンドアウト等)
 }
 
 export type FeedbackType = 'keep' | 'problem' | 'try';
@@ -66,9 +153,13 @@ export interface HintReveal {
 
 export interface GamedayData {
   event: GamedayEvent;
+  systems?: TargetSystem[]; // お題システムの構成図 (シナリオ追加と連動して増やす)
   injects: Inject[];
   feedback: Feedback[];
   hintReveals?: HintReveal[];
+  scoring?: ScoringConfig; // 自動採点のカーブ設定 (無ければ DEFAULT_SCORING)
+  events?: GameEvent[]; // ゲームイベントログ (gameEventsSync が追記。タイムライン素材)
+  review?: Review; // ゲーム終了後の振り返りレビュー (あるときだけ表示)
 }
 
 export function fmtMinutes(value: number): string {

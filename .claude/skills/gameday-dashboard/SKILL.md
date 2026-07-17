@@ -7,7 +7,7 @@ description: GameDay ダッシュボードサイト (dashboard/) の運用と変
 
 GameDay 当日の運営コンソール兼、終了後の共有サイト。インジェクト (運営からの指示) ごとのスコア表、検知・復旧時間のチャート、KPT 振り返りフィードバックを表示する。
 
-- 実体: `dashboard/` — React 19 + TypeScript (Vite+ / `@vitejs/plugin-react-oxc`)。コンポーネントは `src/` (App / Tiles / ScoreTable / TimeChart / KptBoard / Hints)、型は `src/types.ts`
+- 実体: `dashboard/` — React 19 + TypeScript (Vite+ / `@vitejs/plugin-react-oxc`)。コンポーネントは `src/` (App / Tiles / Architecture / AckBanner / ScoreTable / TimeChart / KptBoard / Hints / ReviewBoard)、型は `src/types.ts`、**採点・イベント導出ロジックは `src/scoring.ts` (唯一の置き場。UI と dev サーバの両方が import)**
 - データ: `dashboard/public/data/gameday.json` **このファイルの編集がこのスキルの最頻作業**
 - スキーマ: [references/data-schema.md](references/data-schema.md)
 
@@ -15,9 +15,38 @@ GameDay 当日の運営コンソール兼、終了後の共有サイト。イン
 
 App が `gameday.json` を **3 秒ごとにポーリング**し、内容が変わったら再描画する (`dashboard/src/App.tsx` の `POLL_MS`)。運営が当日 JSON を編集すると数秒で画面に反映され、リロード不要。ヘッダー右上の **LIVE インジケータ**が更新中を示し、ポーリングが失敗しても前回の表示を保持する (画面を消さない)。
 
+## システム構成 (参考資料) — シナリオと連動
+
+本物の GameDay と同様、参加者向けに**お題システムの「元の構成図」と軽い補足**をダッシュボードに載せる。
+データは `gameday.json` の `systems[]` (スキーマ・書き方の指針は [references/data-schema.md](references/data-schema.md))、
+描画は `dashboard/src/Architecture.tsx` — **AWS 公式アーキテクチャアイコン** (npm `aws-icons`、キー定義は
+`dashboard/src/awsIcons.ts`) を使い、層 = グループボックス、リソース = アイコン + 名前、上から下へ矢印でつなぐ。
+カードは折りたたみ可能で、シナリオフィルタに連動して該当システムのタブへ自動で切り替わる。
+新しいサービスのアイコンが要るときは `awsIcons.ts` に import + キー登録する (data-schema.md の一覧参照)。
+
+**新規シナリオを追加したら `systems[]` も必ず更新する** (add-scenario スキルの手順に組み込み済み):
+
+- 既存システムが対象のシナリオ → その system の `scenarioIds` に id を追加。前提インフラで観測手段やノードが増えるなら `tiers` / `notes` にも反映
+- 新しい出発点スタックを使うシナリオ (scenario-03 の GameDay-Legacy 等) → system を新規追加
+- 構成は**記憶で書かず `lib/` の実装から起こす** (どの層に何が何台、canary 名、停止条件アラーム名)
+
 ## ヒント (ポイント消費で開示)
 
 インジェクトに `hints` (段階ヒント) を持たせると、参加者がダッシュボード上で**ポイントを消費して**開示できる。開示すると `cost` が獲得スコアから引かれ、**実効スコア = 素点 − 開示済み cost 合計**がタイル・スコアセルに反映される。開示状態はブラウザ localStorage に保持 (リロードしても残る)。scenarios の「段階ヒント」をポイント制にしたもの。追加はスキーマ ([references/data-schema.md](references/data-schema.md)) の `hints[]` 参照。
+
+## 自動採点 (検知宣言 + アラーム復旧)
+
+「障害 → 検知 → 復旧」が AWS 側のイベントで自動記録され、点数が自動で入る (README「対応状況で
+自動採点」参照)。ダッシュボード側の動き:
+
+- inject に `experimentTemplateId` を記入しておくと、実験開始で「⏱ 実験進行中 (armed)」バナーが出る。
+- canary アラームが ALARM になると「🚨 影響発生中 (impacted)」に変わり、**「検知を宣言する」ボタン**が
+  有効になる (armed 中は押せない — 先押しで検知満点を取る抜け道防止。サーバ側 /api/ack も 409 で弾く)。
+- アラーム OK で「復旧済み (recovered)」になり、検知 (速さ) + 復旧 (MTTR) + 伝達 (`commsScore` 手動) で
+  自動採点され、スコアセルに内訳が小書きされる。
+- 派生フィールド (`impactStartAt` 等) と `events[]` は **dev サーバの sync が管理するので手編集しない**。
+  手動で直したいときは `scoreOverride` (最終裁定) か `commsScore` を使う。詳細は data-schema.md。
+- 自動記録には AWS 認証済みシェルでの起動が必要 (DynamoDB `Scan` + `PutItem`)。未認証でも表示は壊れない。
 
 ## スコア到達で「次の障害」を自動発火 (エスカレーション)
 
@@ -46,7 +75,8 @@ GameDay 中はプロジェクタに映したまま `npm run dashboard` を起動
 2. 依頼内容をスキーマに従って反映する:
    - **インジェクト追加** — `injects[]` に追加。`time` は実時刻、`status` は最初 `"pending"`。FIS 実験と対応する場合は `scenarioId` を scenarios/ の id と一致させる(スコア表・フィルタ・振り返りの突き合わせに使う)。
    - **対応の記録** — 該当インジェクトの `response` に「いつ・誰が・何をしたか」を書く。手動対応 (コンソール操作) は必ず明記する。実験後の `cdk drift` と突き合わせるため。
-   - **採点** — `detectionMinutes` / `recoveryMinutes` / `score` / `status` を確定し、`notes` に採点理由を一言残す。
+   - **採点 (自動記録あり)** — 検知/復旧/素点は自動。運営は `commsScore` (伝達 0〜20) を記入し、補正が要るときだけ `scoreOverride`。`notes` に採点理由を一言残す。
+   - **採点 (自動記録なし = canary 死角や手動運用)** — 従来どおり `detectionMinutes` / `recoveryMinutes` / `score` / `status` を確定する。
    - **フィードバック追加** — `feedback[]` に `type: keep | problem | try` で追加。
 3. 保存すれば dev サーバが即時反映する。JSON の構文エラーは画面が読み込みエラーになるので、編集後に画面の表示を確認する。
 
@@ -54,18 +84,21 @@ GameDay 中はプロジェクタに映したまま `npm run dashboard` を起動
 
 各インジェクト 100 点。配点は GameDay の学習目標に合わせて調整してよいが、初期値はこれを使う:
 
-| 観点 | 配点 | 見るもの |
-|---|---|---|
-| 検知 | 40 | 気づくまでの速さ。canary / アラームなど正しい観測から気づけたか (偶然でなく) |
-| 対応 | 40 | 影響範囲の説明が正確か。処置が適切か — **自己回復を見極めた「静観」も満点になりうる** |
-| 伝達・記録 | 20 | 状況宣言、対応の宣言、タイムラインの記録が残っているか |
+| 観点 | 配点 | 見るもの | 自動/手動 |
+|---|---|---|---|
+| 検知 | 40 | 気づくまでの速さ。canary / アラームなど正しい観測から気づけたか (偶然でなく) | 自動 (影響開始→検知宣言。2 分以内満点→15 分で 0 に線形減衰) |
+| 対応 | 40 | 影響範囲の説明が正確か。処置が適切か — **自己回復を見極めた「静観」も満点になりうる** | 自動 (影響開始→アラーム OK。5 分以内満点→30 分で 0) |
+| 伝達・記録 | 20 | 状況宣言、対応の宣言、タイムラインの記録が残っているか | 手動 (`commsScore`) |
 
-減点ではなく加点で考える。「壊れたのに高得点」が GameDay の理想形(система が守り、人が正しく観測した)。
+減衰カーブは gameday.json の `scoring` セクションで調整できる (無ければ上記の既定値)。
+減点ではなく加点で考える。「壊れたのに高得点」が GameDay の理想形(システムが守り、人が正しく観測した)。
+自動採点が実態に合わないとき (帰属ミス・特殊事情) は `scoreOverride` で最終裁定する。
 
 ## 振り返りとの連携
 
-- 実験終了後、`gameday-retrospective` スキルが `retrospectives/` に作るレポートの「学び」「アクションアイテム」から、共有したいものを `feedback[]` (KPT) に転記する。
-- 逆に、当日ダッシュボードに記録した `response` / `notes` は振り返りレポートのタイムラインの一次資料になる。
+- ゲーム終了後、`gameday-retrospective` スキルが講評を **gameday.json の `review` セクション**に書き込み、ダッシュボード末尾に「振り返りレビュー」として表示される (総評 + インジェクトごとの講評カード)。
+- レポートの「学び」「アクションアイテム」から、共有したいものを `feedback[]` (KPT) に転記する運用は従来どおり。
+- 当日自動記録された `events[]` (実験開始 / ALARM / OK / 検知宣言) と `response` / `notes` / `hintReveals` が振り返りレポートのタイムラインの一次資料になる。
 
 ## 画面・デザインを変更するとき
 

@@ -19,6 +19,7 @@
   --status-critical: #d03b3b;
   --tooltip-bg: #0b0b0b;
   --tooltip-ink: #ffffff;
+  --icon-plate: #ffffff; /* AWS アイコンの背面プレート (アイコンは白地前提のデザイン) */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +38,7 @@
     --meter-fill: #86b6ef;
     --tooltip-bg: #fcfcfb;
     --tooltip-ink: #0b0b0b;
+    --icon-plate: #ffffff; /* ダークでも白のまま: 紺色の汎用アイコン (Users 等) の視認性を保つ */
   }
 }
 
@@ -132,6 +134,76 @@ body {
 .card h2 { margin: 0; font-size: 16px; font-weight: 650; }
 .card-sub { margin: 2px 0 14px; color: var(--text-secondary); font-size: 13px; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+
+/* --- システム構成 (参考資料) --- */
+.arch-head { cursor: pointer; }
+.arch-head h2 { display: inline; margin: 0; font-size: 16px; font-weight: 650; }
+.arch-head .card-sub { margin: 2px 0 0 0; }
+.arch[open] .arch-head .card-sub { margin-bottom: 14px; }
+
+.arch-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.arch-tab {
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.arch-tab.active {
+  color: var(--text-primary);
+  font-weight: 600;
+  border-color: var(--series-1);
+}
+
+.arch-summary { margin: 0 0 4px; color: var(--text-secondary); font-size: 13px; }
+.arch-scenarios { margin: 0 0 12px; color: var(--text-muted); font-size: 12px; }
+
+/* 構成図: AWS 公式アイコンで描く。層 = グループボックス (サブネット境界のメタファ)、
+   ノード = アイコン + 名前の縦積み (AWS 構成図の作法)、上から下へ矢印でつなぐ */
+.arch-diagram { display: flex; flex-direction: column; }
+.arch-tier {
+  border: 1px dashed var(--baseline);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.arch-tier-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 550;
+  margin-bottom: 10px;
+}
+.arch-tier-icon { width: 18px; height: 18px; flex: none; }
+.arch-nodes { display: flex; gap: 8px 24px; flex-wrap: wrap; align-items: flex-start; }
+.arch-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 2px 4px;
+  max-width: 220px;
+}
+.arch-node-icon {
+  width: 48px;
+  height: 48px;
+  padding: 4px;
+  background: var(--icon-plate);
+  border-radius: 8px;
+}
+.arch-node-service { font-size: 13px; font-weight: 600; }
+.arch-node-count { color: var(--text-secondary); font-weight: 500; font-size: 12px; margin-left: 4px; }
+.arch-node-label { color: var(--text-secondary); font-size: 11.5px; line-height: 1.45; }
+.arch-tier-note { margin: 8px 0 0; color: var(--text-muted); font-size: 12px; }
+.arch-arrow { text-align: center; color: var(--text-muted); font-size: 13px; line-height: 1.4; }
+
+.arch-notes { margin: 12px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 13px; }
+.arch-notes li { margin-top: 2px; }
 
 /* --- スコア表 --- */
 .table-wrap { overflow-x: auto; }
@@ -323,3 +395,57 @@ code {
   padding: 20px;
   color: var(--text-secondary);
 }
+
+/* --- 進行中インシデントのバナー (AckBanner) --- */
+.ack-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-muted);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+}
+.ack-banner.impacted { border-left-color: var(--status-critical); }
+.ack-banner-body { display: flex; flex-direction: column; gap: 2px; }
+.ack-banner-state { font-weight: 650; font-size: 15px; }
+.ack-banner.impacted .ack-banner-state { color: var(--status-critical); }
+.ack-banner.armed .ack-banner-state { color: var(--text-secondary); }
+.ack-banner-title { font-weight: 600; }
+.ack-banner-note { color: var(--text-secondary); font-size: 13px; }
+.ack-button {
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  color: var(--tooltip-ink);
+  background: var(--tooltip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 18px;
+}
+.ack-button:hover { opacity: 0.85; }
+.ack-button.small { display: block; font-size: 12px; font-weight: 600; padding: 2px 10px; margin-top: 6px; border-radius: 999px; }
+.ack-done { color: var(--status-good); font-weight: 600; font-size: 13px; }
+
+/* --- 自動採点の内訳 (スコアセルの小書き) --- */
+.score-breakdown { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+
+/* --- 振り返りレビュー (ReviewBoard) --- */
+.review-overall { white-space: pre-line; margin: 0 0 14px; }
+.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.review-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.review-headline { margin: 0; font-size: 14px; font-weight: 650; }
+.review-inject { margin: 2px 0 8px; color: var(--text-muted); font-size: 12px; }
+.review-commentary { white-space: pre-line; margin: 0 0 8px; font-size: 13px; }
+.review-list { margin: 0 0 6px; padding-left: 18px; font-size: 13px; }
+.review-list li { margin-bottom: 2px; }
+.review-list.went-well li::marker { color: var(--status-good); }
+.review-list.to-improve li::marker { color: var(--status-warning); }

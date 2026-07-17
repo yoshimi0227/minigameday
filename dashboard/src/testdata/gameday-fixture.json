@@ -5,6 +5,44 @@
     "team": "Team Phoenix",
     "note": "サンプルデータ。GameDay 当日はこのファイルを編集すると画面に即時反映される (npm run dashboard)"
   },
+  "systems": [
+    {
+      "id": "sys-main",
+      "name": "本体 (3 層 Web)",
+      "summary": "ALB + Fargate + Aurora の 3 層アプリ。トップページが DB に SELECT 1 して 200/503 を返す。",
+      "scenarioIds": ["scenario-01"],
+      "tiers": [
+        {
+          "name": "Web/LB 層",
+          "icon": "public-subnet",
+          "nodes": [{ "service": "ALB", "icon": "alb", "label": "internet-facing / HTTP:80" }]
+        },
+        {
+          "name": "アプリ層",
+          "icon": "private-subnet",
+          "nodes": [{ "service": "ECS Fargate", "icon": "fargate", "count": 2, "label": "desiredCount=2" }]
+        },
+        {
+          "name": "データ層",
+          "nodes": [{ "service": "Aurora Serverless v2", "icon": "aurora", "label": "writer + reader" }],
+          "note": "隔離サブネット"
+        }
+      ],
+      "notes": ["canary gameday-top が 1 分間隔で外形監視"]
+    },
+    {
+      "id": "sys-sub",
+      "name": "サブ環境 (検証用)",
+      "summary": "フィクスチャ用のサンプル。scenario-02 をこちらに紐づけ、フィルタとタブの連動をテストする。",
+      "scenarioIds": ["scenario-02"],
+      "tiers": [
+        {
+          "name": "データ層",
+          "nodes": [{ "service": "Aurora writer", "icon": "aurora" }, { "service": "Aurora reader", "icon": "unknown-icon-key" }]
+        }
+      ]
+    }
+  ],
   "injects": [
     {
       "id": "inject-1",
@@ -37,6 +75,36 @@
       "score": 60,
       "maxScore": 100,
       "notes": "接続プールの再接続設定に課題。手動変更は振り返りで IaC への反映を判断する。"
+    },
+    {
+      "id": "inject-3",
+      "scenarioId": "scenario-01",
+      "time": "13:00",
+      "title": "遅延付きタスク停止 (実験進行中)",
+      "instruction": "faultDelayMinutes=5-15 で開始。障害がいつ来るかは参加者に知らされない。",
+      "status": "armed",
+      "maxScore": 100,
+      "experimentTemplateId": "EXTfixture001",
+      "experimentId": "EXPfixture001",
+      "experimentStartedAt": "2026-07-15T04:00:00Z"
+    },
+    {
+      "id": "inject-4",
+      "scenarioId": "scenario-02",
+      "time": "14:10",
+      "title": "自動採点の実例 (検知宣言 + アラーム復旧)",
+      "instruction": "検知はダッシュボードの検知宣言、復旧は canary ヘルスアラームの OK 遷移で自動記録される。",
+      "status": "recovered",
+      "maxScore": 100,
+      "experimentTemplateId": "EXTfixture002",
+      "experimentId": "EXPfixture002",
+      "experimentStartedAt": "2026-07-15T05:00:00Z",
+      "impactStartAt": "2026-07-15T05:10:00Z",
+      "ackAt": "2026-07-15T05:12:00Z",
+      "recoveredAt": "2026-07-15T05:15:00Z",
+      "detectionMinutes": 2,
+      "recoveryMinutes": 5,
+      "commsScore": 15
     }
   ],
   "feedback": [
@@ -79,5 +147,56 @@
   ],
   "hintReveals": [
     { "injectId": "inject-1", "hintId": "h1-2", "label": "具体手順", "cost": 20, "at": "2026-07-15T01:30:00Z" }
-  ]
+  ],
+  "scoring": {
+    "detection": { "maxPoints": 40, "fullWithinMinutes": 2, "zeroAfterMinutes": 15 },
+    "recovery": { "maxPoints": 40, "fullWithinMinutes": 5, "zeroAfterMinutes": 30 },
+    "commsMaxPoints": 20
+  },
+  "events": [
+    {
+      "key": "EVENT#2026-07-15T04:00:00Z#aaa",
+      "type": "experiment",
+      "at": "2026-07-15T04:00:00Z",
+      "experimentId": "EXPfixture001",
+      "experimentTemplateId": "EXTfixture001",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-15T05:10:00Z#bbb",
+      "type": "alarm",
+      "at": "2026-07-15T05:10:00Z",
+      "alarmName": "gameday-canary-health",
+      "state": "ALARM",
+      "reason": "SuccessPercent < 100"
+    },
+    {
+      "key": "ACK#inject-4",
+      "type": "ack",
+      "at": "2026-07-15T05:12:00Z",
+      "injectId": "inject-4"
+    },
+    {
+      "key": "EVENT#2026-07-15T05:15:00Z#ccc",
+      "type": "alarm",
+      "at": "2026-07-15T05:15:00Z",
+      "alarmName": "gameday-canary-health",
+      "state": "OK",
+      "reason": "SuccessPercent back to 100"
+    }
+  ],
+  "review": {
+    "generatedAt": "2026-07-15T07:00:00Z",
+    "overall": "検知は canary 起点で安定して速い。一方で復旧手段が毎回アドホックなので、次回はランブック化を試したい。",
+    "reportPath": "retrospectives/2026-07-15-rehearsal.md",
+    "injects": [
+      {
+        "injectId": "inject-1",
+        "headline": "静観の判断が正解",
+        "commentary": "タスク停止から約 30 秒で ECS が自己回復し、canary の成功率は落ちなかった。\n「壊れたのに直さない」判断を観測ベースで下せたのが最大の収穫。",
+        "wentWell": ["canary 成功率を最初に確認する動きが定着"],
+        "toImprove": ["静観の判断基準を宣言としてダッシュボードに残す"]
+      }
+    ]
+  }
 }

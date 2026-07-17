@@ -5,8 +5,8 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   test: {
     // CDK テスト (node) + dashboard の React コンポーネントテスト (jsdom はファイル側の
-    // @vitest-environment ディレクティブで指定)
-    include: ['test/**/*.test.ts', 'dashboard/src/**/*.test.tsx'],
+    // @vitest-environment ディレクティブで指定) + dashboard の純ロジックテスト (.test.ts)
+    include: ['test/**/*.test.ts', 'dashboard/src/**/*.test.{ts,tsx}'],
     environment: 'node',
     // CDK 合成は Lambda を esbuild でバンドルする (NodejsFunction) ため既定 5s を超え得る。
     testTimeout: 30000,
