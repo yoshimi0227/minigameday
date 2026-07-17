@@ -222,19 +222,33 @@
       "id": "r1-stop",
       "scenarioId": "scenario-01",
       "round": 1,
+      "time": "(前回検証済)",
       "title": "タスク停止 (観察)",
       "instruction": "R1: Fargate タスクを 1 つ停止。自己回復するので静観が正解になりうる。",
+      "response": "R1 観察ラウンドの見本。タスク停止は約 30 秒で自己回復し canary は緑を維持 → 静観が正解 (リハーサル #2 で実測済み)。",
+      "status": "success",
       "maxScore": 100,
       "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
-      "status": "pending"
+      "experimentId": "EXPPWSuJPJHCSL4as4",
+      "experimentStartedAt": "2026-07-17T12:20:00Z",
+      "impactStartAt": "2026-07-17T12:23:26Z",
+      "recoveredAt": "2026-07-17T12:23:49Z",
+      "recoveryMinutes": 0.4,
+      "score": 90,
+      "notes": "R1 は「壊れても待てば戻る」。復旧 40 点は待てば入り、検知の速さと伝達で差がつく。",
+      "detectionMinutes": 1
     },
     {
       "id": "r2-scale",
       "scenarioId": "scenario-05",
       "round": 2,
+      "time": "22:48",
       "title": "desiredCount=0 (対応)",
       "instruction": "R2: Fargate を desiredCount=0 に落とす。自己回復しない。参加者が 2 に戻すまで復旧しない。",
+      "response": "22:50 に desiredCount=0 で 503。22:52 canary ALARM を検知して宣言 (24 秒)。ECS の desiredCount/RunningTaskCount を確認し、放置しても戻らないことを確認 → update-service で desiredCount を 2 に戻して復旧 (22:52)。",
+      "status": "recovered",
       "maxScore": 100,
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
       "hints": [
         {
           "id": "hr2-1",
@@ -249,11 +263,37 @@
           "text": "aws ecs update-service --desired-count 2 で戻す。"
         }
       ],
-      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
-      "status": "pending"
+      "experimentId": "EXPqbHCZVQ2Ezg5A6n",
+      "experimentStartedAt": "2026-07-17T13:41:17Z",
+      "impactStartAt": "2026-07-17T13:51:49Z",
+      "ackAt": "2026-07-17T13:52:13.229Z",
+      "detectionMinutes": 0.4,
+      "notes": "自己回復しない障害の実証。検知 0.4 分 / 復旧 3 分は「人が戻す」対応時間そのもの。伝達: 宣言→操作は速いが記録は事後 → 12/20。",
+      "commsScore": 12,
+      "recoveredAt": "2026-07-17T13:54:49Z",
+      "recoveryMinutes": 3
     }
   ],
-  "feedback": [],
+  "feedback": [
+    {
+      "type": "keep",
+      "scenarioId": null,
+      "author": "運営",
+      "comment": "2 ラウンド制で「観察 (静観が正解)」と「対応 (人が直す)」を分けたことで、R2 は MTTR が本当に人の対応時間を測るようになった。"
+    },
+    {
+      "type": "problem",
+      "scenarioId": "scenario-05",
+      "author": "運営",
+      "comment": "FIS の SSM automation は documentArn の形式 (document/) と実験ロールの SSM 権限で 2 回踏んだ。ネイティブでない操作は実機一巡が必須。"
+    },
+    {
+      "type": "try",
+      "scenarioId": "scenario-03",
+      "author": "運営",
+      "comment": "legacy の EC2 rebuild を通しで (30〜60 分) やる回を設ける。イベント記録のクロススタック書き込みは確認済み。"
+    }
+  ],
   "hintReveals": [],
   "scoring": {
     "detection": {
@@ -268,5 +308,90 @@
     },
     "commsMaxPoints": 20
   },
-  "events": []
+  "events": [
+    {
+      "key": "EVENT#2026-07-17T13:41:17Z#7fd2fd4c-ba61-d1cc-aecf-217606760085",
+      "type": "experiment",
+      "at": "2026-07-17T13:41:17Z",
+      "experimentId": "EXPqbHCZVQ2Ezg5A6n",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:43:32Z#d0f4db4f-4754-db3a-76c4-b0ab0160da24",
+      "type": "experiment",
+      "at": "2026-07-17T13:43:32Z",
+      "experimentId": "EXPqbHCZVQ2Ezg5A6n",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "failed"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:48:05Z#7d64b23e-0093-61fc-9b1c-9c8af12c588e",
+      "type": "experiment",
+      "at": "2026-07-17T13:48:05Z",
+      "experimentId": "EXPEwhn2Jvumj4DCcz",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:51:00Z#2052360e-51bf-f26f-c804-5a3ebaac2069",
+      "type": "experiment",
+      "at": "2026-07-17T13:51:00Z",
+      "experimentId": "EXPEwhn2Jvumj4DCcz",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "completed"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:51:49Z#61679133-159e-435e-e839-3145432eeeb5",
+      "type": "alarm",
+      "at": "2026-07-17T13:51:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "ALARM",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [0.0 (17/07/26 13:50:00)] was less than the threshold (100.0) (minimum 1 datapoint for OK -> ALARM transition)."
+    },
+    {
+      "key": "ACK#r2-scale",
+      "type": "ack",
+      "at": "2026-07-17T13:52:13.229Z",
+      "injectId": "r2-scale"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:54:49Z#53bc8f9a-0ec8-b9f7-acb0-9d05028dfcd4",
+      "type": "alarm",
+      "at": "2026-07-17T13:54:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "OK",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 13:53:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
+    }
+  ],
+  "review": {
+    "generatedAt": "2026-07-17T14:05:00Z",
+    "overall": "2 ラウンド制が実機で成立した。R1 観察 (自己回復) は待てば戻り、R2 対応 (scale-to-zero) は desiredCount=0 のまま自己回復せず、参加者が戻すまで canary は赤 = MTTR が対応速度を実測した。新機能の実装で踏んだ罠 (SSM automation の documentArn 形式・実験ロール権限) はすべて実機一巡で回収し、検証済みメモに反映した。",
+    "reportPath": "retrospectives/2026-07-17-rehearsal-3.md",
+    "injects": [
+      {
+        "injectId": "r1-stop",
+        "headline": "R1 観察: 静観が正解 (自己回復)",
+        "commentary": "タスク停止は約 30 秒で ECS が自己回復し canary は緑を維持。復旧 40 点は待てば入る = 観察ラウンドは検知の速さと伝達で差がつく。リハーサル #2 で実測済みの見本。",
+        "wentWell": [
+          "「壊れても待てば戻る」を体感する導入として機能"
+        ],
+        "toImprove": [
+          "R1 は自動採点の復旧点が甘くなる。観察ラウンドは判断の質 (静観の宣言) を伝達点で見る"
+        ]
+      },
+      {
+        "injectId": "r2-scale",
+        "headline": "R2 対応: 人が desiredCount を戻すまで復旧しない",
+        "commentary": "SSM automation で desiredCount=0 → ALB 503 → canary が本物の ALARM。実験は completed でも desiredCount は 0 のまま (自己回復しない)。検知宣言 (0.4 分) 後、放置しても戻らないことを確認し update-service で 2 に戻して復旧 (MTTR 3 分)。この 3 分は「人が動いた時間」そのもの。",
+        "wentWell": [
+          "自己回復しない障害で MTTR が対応速度を実測した",
+          "armed→impacted→検知宣言→復旧→recovered の全遷移が自動記録された"
+        ],
+        "toImprove": [
+          "復旧をコンソールでやると desiredCount が 2 に戻り drift は消える。console/CDK の判別は R1・scenario-03 側で見る"
+        ]
+      }
+    ]
+  }
 }
