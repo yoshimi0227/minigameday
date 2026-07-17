@@ -134,18 +134,33 @@ bash scripts/collect-retrospective.sh <experiment-id> > retro-data.md
 「振り返りレビュー」(総評 + インジェクトごとの講評カード) として表示される。ゲーム中に自動記録された
 `events[]` (実験開始 / ALARM / OK / 検知宣言) のタイムラインとヒント消費が講評の一次資料になる。
 
-### フェーズ6: リセット(次のラウンド / 撤収)
+### フェーズ6: リセット(周回 / 撤収)
+
+**周回リセット** — destroy せずに「もう一度遊べる」状態へ戻す(約 5 分。destroy→deploy の 20〜30 分待ちを避ける):
 
 ```bash
-# 前チェック: 実験が停止していること (running が無いこと)
-aws fis list-experiments --query "experiments[?state.status=='running'].id"   # 空であること
+npm run reset                # 一括リセット (下の 5 ステップ)
+npm run reset -- --dry-run   # 何が起きるかの確認だけ (変更なし)
+```
 
-# 手動対応 (フェーズ4-A) で付いたドリフトをコードの状態へ revert する。
-# CloudFormation のドリフト検出を使い "現実 → 期待状態" に戻す change set を作る。
-npx cdk deploy --revert-drift   # 新しめの CDK CLI が必要 (この環境の 2.1126.0 で確認済み)
-npm run drift                   # 再度 "No drift detected" を確認 = リセット完了
+`scripts/reset-gameday.ts` が行うこと:
 
-# 完全撤収 (課金停止)
+1. 実行中の FIS 実験(`gameday-*` テンプレート由来)を停止し、終了を待つ
+2. `cdk deploy --all --revert-drift` — 手動対応のドリフトをコードの状態へ巻き戻す
+   (drift-aware change set。新しめの CDK CLI が必要 — この環境の 2.1126.0 で確認済み。
+   terminate 済みの legacy EC2 の再作成もここで行われる)
+3. DynamoDB `gameday-score` の全アイテム削除 — **エスカレーションの `FIRED#` 冪等キーが
+   残っていると 2 周目に自動発火しない**ため、ゲーム状態のワイプは必須
+4. gameday.json をインジェクト定義だけの初期状態へ(旧データは `dashboard/data-archive/` に退避)
+5. `npm run drift` 相当で "No drift" を確認
+
+スタックを保つので **FIS テンプレート ID は変わらない**(gameday.json の
+`experimentTemplateId` もそのまま使える)。scenario-03 で参加者が作った**スタック外**リソース
+だけは revert の対象外 — `scenarios/03-ec2-to-ecs-rebuild.md` の棚卸しリストで手動削除する。
+
+**完全撤収 (課金停止)**:
+
+```bash
 npm run destroy                 # cdk destroy --all
 ```
 

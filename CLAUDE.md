@@ -112,7 +112,8 @@ npm run synth          # cdk synth (全スタック)
 npm run diff           # cdk diff
 npm run deploy         # cdk deploy --all (GameDay → GameDay-Legacy の順)。単体は npx cdk deploy GameDay 等
 npm run drift          # cdk drift (振り返り。ポーリング込み)
-npm run destroy        # cdk destroy --all (都度確認)
+npm run reset          # 周回リセット (実験停止 → revert-drift → gameday-score ワイプ → gameday.json 初期化。destroy しない)
+npm run destroy        # cdk destroy --all (都度確認。完全撤収のときだけ)
 aws fis start-experiment --experiment-template-id <id>      # 障害注入
 aws fis get-experiment --id <id>                            # 実験の状態・タイムライン
 aws fis stop-experiment --id <id>                           # 実験の緊急停止

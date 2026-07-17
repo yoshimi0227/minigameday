@@ -17,9 +17,11 @@
     "diff": "cdk diff",
     "deploy": "cdk deploy --all",
     "destroy": "cdk destroy --all",
-    "drift": "cdk drift"
+    "drift": "cdk drift",
+    "reset": "tsx scripts/reset-gameday.ts"
   },
   "devDependencies": {
+    "@aws-sdk/client-cloudformation": "^3.1089.0",
     "@aws-sdk/client-dynamodb": "^3.1085.0",
     "@aws-sdk/client-fis": "^3.1085.0",
     "@testing-library/react": "^16.3.2",
