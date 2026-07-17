@@ -731,6 +731,251 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
       },
       "Type": "AWS::IAM::Role",
     },
+    "GameEventsAlarmStateRule257B89FF": {
+      "Properties": {
+        "Description": "GameDay: canary ヘルスアラームの ALARM/OK 遷移を記録する",
+        "EventPattern": {
+          "detail": {
+            "state": {
+              "value": [
+                "ALARM",
+                "OK",
+              ],
+            },
+          },
+          "detail-type": [
+            "CloudWatch Alarm State Change",
+          ],
+          "resources": [
+            {
+              "Fn::GetAtt": [
+                "LegacyCanaryHealth5F7AA03D",
+                "Arn",
+              ],
+            },
+          ],
+          "source": [
+            "aws.cloudwatch",
+          ],
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "GameEventsRecorder0CA78C96",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "GameEventsAlarmStateRuleAllowEventRuleLegacyGameEventsRecorder667B6AFDA6AA9062": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "GameEventsRecorder0CA78C96",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "GameEventsAlarmStateRule257B89FF",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "GameEventsFisStateRule1ED046DE": {
+      "Properties": {
+        "Description": "GameDay: FIS 実験の状態遷移 (running/completed/stopped/failed) を記録する",
+        "EventPattern": {
+          "detail": {
+            "experiment-template-id": [
+              {
+                "Fn::GetAtt": [
+                  "TerminateEc2Experiment",
+                  "Id",
+                ],
+              },
+            ],
+            "new-state": {
+              "status": [
+                "running",
+                "completed",
+                "stopped",
+                "failed",
+              ],
+            },
+          },
+          "detail-type": [
+            "FIS Experiment State Change",
+          ],
+          "source": [
+            "aws.fis",
+          ],
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "GameEventsRecorder0CA78C96",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "GameEventsFisStateRuleAllowEventRuleLegacyGameEventsRecorder667B6AFD73CA4E28": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "GameEventsRecorder0CA78C96",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "GameEventsFisStateRule1ED046DE",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "GameEventsRecorder0CA78C96": {
+      "DependsOn": [
+        "GameEventsRecorderServiceRoleDefaultPolicy98BBF6D7",
+        "GameEventsRecorderServiceRoleABB44B0F",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": "gameday-score",
+          },
+        },
+        "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "GameEventsRecorderLogs53B01156",
+          },
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "GameEventsRecorderServiceRoleABB44B0F",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 10,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "GameEventsRecorderLogs53B01156": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 7,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "GameEventsRecorderServiceRoleABB44B0F": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "GameEventsRecorderServiceRoleDefaultPolicy98BBF6D7": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "dynamodb:BatchWriteItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem",
+                "dynamodb:DescribeTable",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":dynamodb:",
+                      {
+                        "Ref": "AWS::Region",
+                      },
+                      ":",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":table/gameday-score",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "GameEventsRecorderServiceRoleDefaultPolicy98BBF6D7",
+        "Roles": [
+          {
+            "Ref": "GameEventsRecorderServiceRoleABB44B0F",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
     "LegacyCanary0B8FBE2A": {
       "Properties": {
         "ArtifactS3Location": {
@@ -847,6 +1092,30 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
         },
       },
       "Type": "AWS::S3::BucketPolicy",
+    },
+    "LegacyCanaryHealth5F7AA03D": {
+      "Properties": {
+        "AlarmDescription": "GameDay legacy: canary 成功率<100 で影響開始 (ALARM)、100 復帰で復旧 (OK)。自動採点の記録に使う。",
+        "AlarmName": "gameday-legacy-canary-health",
+        "ComparisonOperator": "LessThanThreshold",
+        "DatapointsToAlarm": 1,
+        "Dimensions": [
+          {
+            "Name": "CanaryName",
+            "Value": {
+              "Ref": "LegacyCanary0B8FBE2A",
+            },
+          },
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "SuccessPercent",
+        "Namespace": "CloudWatchSynthetics",
+        "Period": 60,
+        "Statistic": "Average",
+        "Threshold": 100,
+        "TreatMissingData": "notBreaching",
+      },
+      "Type": "AWS::CloudWatch::Alarm",
     },
     "LegacyCanaryServiceRole2CD47263": {
       "Properties": {
@@ -1949,6 +2218,15 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         ],
       },
     },
+    "FaultInjectionScaleToZeroTemplateId74929296": {
+      "Description": "シナリオ5 (対応ラウンド): aws fis start-experiment --experiment-template-id <これ>",
+      "Value": {
+        "Fn::GetAtt": [
+          "FaultInjectionScaleToZero256AE283",
+          "Id",
+        ],
+      },
+    },
     "FaultInjectionStopTaskTemplateIdE57DC0C6": {
       "Description": "シナリオ1: aws fis start-experiment --experiment-template-id <これ>",
       "Value": {
@@ -2234,6 +2512,255 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       },
       "Type": "AWS::IAM::Role",
     },
+    "FaultInjectionFisSsmRole5EB82699": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "fis.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "GameDay FIS role (SSM automation: ECS scale to zero)",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSFaultInjectionSimulatorSSMAccess",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "FaultInjectionFisSsmRoleDefaultPolicyB0B7E3B9": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "iam:PassRole",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "FaultInjectionScaleToZeroAutomationRole914966A4",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": "cloudwatch:DescribeAlarms",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "logs:CreateLogDelivery",
+                "logs:PutResourcePolicy",
+                "logs:DescribeResourcePolicies",
+                "logs:DescribeLogGroups",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FaultInjectionFisSsmRoleDefaultPolicyB0B7E3B9",
+        "Roles": [
+          {
+            "Ref": "FaultInjectionFisSsmRole5EB82699",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "FaultInjectionScaleToZero256AE283": {
+      "Properties": {
+        "Actions": {
+          "ScaleToZero": {
+            "ActionId": "aws:ssm:start-automation-execution",
+            "Description": "Run SSM automation that sets the ECS service desiredCount to 0",
+            "Parameters": {
+              "documentArn": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ssm:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":document/",
+                    {
+                      "Ref": "FaultInjectionScaleToZeroDoc43454D6F",
+                    },
+                  ],
+                ],
+              },
+              "documentParameters": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "{"AutomationAssumeRole":"",
+                    {
+                      "Fn::GetAtt": [
+                        "FaultInjectionScaleToZeroAutomationRole914966A4",
+                        "Arn",
+                      ],
+                    },
+                    "","Cluster":"",
+                    {
+                      "Ref": "TargetAppClusterFBBD8610",
+                    },
+                    "","Service":"",
+                    {
+                      "Fn::GetAtt": [
+                        "TargetAppServiceE810121B",
+                        "Name",
+                      ],
+                    },
+                    ""}",
+                  ],
+                ],
+              },
+              "maxDuration": "PT1M",
+            },
+          },
+        },
+        "Description": "GameDay: Fargate を desiredCount=0 に落とす。自己回復しないので参加者が戻すまで復旧しない",
+        "LogConfiguration": {
+          "CloudWatchLogsConfiguration": {
+            "LogGroupArn": {
+              "Fn::GetAtt": [
+                "FaultInjectionExperimentLogs844D302F",
+                "Arn",
+              ],
+            },
+          },
+          "LogSchemaVersion": 2,
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "FaultInjectionFisSsmRole5EB82699",
+            "Arn",
+          ],
+        },
+        "StopConditions": [
+          {
+            "Source": "aws:cloudwatch:alarm",
+            "Value": {
+              "Fn::GetAtt": [
+                "ObservabilityHttp5xxStopAlarmFC175C42",
+                "Arn",
+              ],
+            },
+          },
+        ],
+        "Tags": {
+          "Name": "gameday-scale-to-zero",
+        },
+        "Targets": {},
+      },
+      "Type": "AWS::FIS::ExperimentTemplate",
+    },
+    "FaultInjectionScaleToZeroAutomationRole914966A4": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ssm.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "GameDay SSM automation role (ECS scale to zero)",
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "FaultInjectionScaleToZeroAutomationRoleDefaultPolicy5CA923F3": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ecs:UpdateService",
+                "ecs:DescribeServices",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "TargetAppServiceE810121B",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FaultInjectionScaleToZeroAutomationRoleDefaultPolicy5CA923F3",
+        "Roles": [
+          {
+            "Ref": "FaultInjectionScaleToZeroAutomationRole914966A4",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "FaultInjectionScaleToZeroDoc43454D6F": {
+      "Properties": {
+        "Content": {
+          "assumeRole": "{{ AutomationAssumeRole }}",
+          "description": "GameDay: set the target ECS service desiredCount to 0 (no auto-recovery)",
+          "mainSteps": [
+            {
+              "action": "aws:executeAwsApi",
+              "inputs": {
+                "Api": "UpdateService",
+                "Service": "ecs",
+                "cluster": "{{ Cluster }}",
+                "desiredCount": 0,
+                "service": "{{ Service }}",
+              },
+              "name": "ScaleToZero",
+            },
+          ],
+          "parameters": {
+            "AutomationAssumeRole": {
+              "type": "String",
+            },
+            "Cluster": {
+              "type": "String",
+            },
+            "Service": {
+              "type": "String",
+            },
+          },
+          "schemaVersion": "0.3",
+        },
+        "DocumentFormat": "JSON",
+        "DocumentType": "Automation",
+      },
+      "Type": "AWS::SSM::Document",
+    },
     "FaultInjectionStopOneTaskB57D489D": {
       "Properties": {
         "Actions": {
@@ -2389,6 +2916,12 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
               {
                 "Fn::GetAtt": [
                   "FaultInjectionFailoverDb06004B19",
+                  "Id",
+                ],
+              },
+              {
+                "Fn::GetAtt": [
+                  "FaultInjectionScaleToZero256AE283",
                   "Id",
                 ],
               },

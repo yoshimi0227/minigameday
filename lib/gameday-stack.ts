@@ -42,6 +42,8 @@ export class GamedayStack extends cdk.Stack {
       targetTagKey: targetApp.targetTagKey,
       targetTagValue: targetApp.targetTagValue,
       databaseCluster: targetApp.databaseCluster,
+      service: targetApp.service,
+      cluster: targetApp.cluster,
       faultDelayMinutes: faultDelayRaw,
     });
 
@@ -77,6 +79,7 @@ export class GamedayStack extends cdk.Stack {
       experimentTemplateIds: [
         faultInjection.stopTaskTemplateId,
         faultInjection.failoverDbTemplateId,
+        faultInjection.scaleToZeroTemplateId,
       ],
     });
   }

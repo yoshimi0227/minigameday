@@ -1,4 +1,4 @@
-import { test, beforeAll } from 'vitest';
+import { test, expect, beforeAll } from 'vitest';
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { LegacyAppStack } from '../lib/legacy-app-stack';
@@ -91,4 +91,37 @@ test('FIS ロールの terminate 権限はタグ条件で絞られている (爆
       ]),
     }),
   });
+});
+
+test('本番モード: canary ヘルスアラーム (影響/復旧の記録用) を持つ。停止条件アラームとは別物', () => {
+  // EC2 死亡=ALARM、rebuild 完了=OK を記録するアラーム。停止条件 (abort) とは独立
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: 'gameday-legacy-canary-health',
+    ComparisonOperator: 'LessThanThreshold',
+    Threshold: 100,
+    TreatMissingData: 'notBreaching',
+  });
+  // abort (停止条件) + canary-health (記録) の 2 アラームがある
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+});
+
+test('本番モード: GameEvents がアラーム遷移と FIS 状態遷移を同じ Lambda で記録する', () => {
+  // EventBridge ルール 2 本 (アラーム状態遷移 + FIS 状態遷移)
+  template.hasResourceProperties('AWS::Events::Rule', {
+    EventPattern: Match.objectLike({ 'detail-type': ['CloudWatch Alarm State Change'] }),
+  });
+  template.hasResourceProperties('AWS::Events::Rule', {
+    EventPattern: Match.objectLike({ 'detail-type': ['FIS Experiment State Change'] }),
+  });
+  template.resourceCountIs('AWS::Events::Rule', 2);
+});
+
+test('本番モード: 記録 Lambda は gameday-score テーブルに書き込む (cross-stack Export なし)', () => {
+  // テーブルは名前インポートなので Fn::ImportValue に化けない = 環境変数はリテラル名
+  template.hasResourceProperties('AWS::Lambda::Function', {
+    Environment: Match.objectLike({ Variables: Match.objectLike({ TABLE_NAME: 'gameday-score' }) }),
+  });
+  // 名前インポートは Export を生じさせない
+  const exported = Object.values(template.findOutputs('*')).filter((o) => 'Export' in o);
+  expect(exported).toHaveLength(0);
 });

@@ -13,6 +13,8 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as synthetics from 'aws-cdk-lib/aws-synthetics';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { GameEvents } from './constructs/game-events';
 
 /**
  * scenario-03 (単一 EC2 の突然死 → ECS への作り替えで復旧) の出発点スタック。
@@ -278,6 +280,38 @@ export class LegacyAppStack extends cdk.Stack {
         preExperimentDuration: 'PT10M',
         postExperimentDuration: 'PT75M',
       },
+    });
+
+    // --- 本番モード: 自動採点のためのイベント記録 (GameEvents) ---
+    // canary ヘルスアラーム: EC2 死亡=ALARM (影響開始)、rebuild 完了=OK (復旧) の信号にする。
+    // 停止条件に使う abortAlarm (手動 kill switch) とは別物 — canary 赤は rebuild の正常進行なので
+    // 停止条件にはしないが、影響/復旧の記録には canary の赤→緑がそのまま使える。
+    const legacyHealthAlarm = new cloudwatch.Alarm(this, 'LegacyCanaryHealth', {
+      alarmName: 'gameday-legacy-canary-health',
+      alarmDescription:
+        'GameDay legacy: canary 成功率<100 で影響開始 (ALARM)、100 復帰で復旧 (OK)。自動採点の記録に使う。',
+      metric: new cloudwatch.Metric({
+        namespace: 'CloudWatchSynthetics',
+        metricName: 'SuccessPercent',
+        dimensionsMap: { CanaryName: canary.canaryName },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(1),
+      }),
+      threshold: 100,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    // スコア/イベント置き場は本体スタック (GamedayStack) の固定名テーブルを名前で参照する。
+    // cross-stack Export を作らず ITableV2 を得る (GameDay を先に deploy している前提)。
+    const scoreTable = dynamodb.TableV2.fromTableName(this, 'ScoreTable', 'gameday-score');
+
+    new GameEvents(this, 'GameEvents', {
+      healthAlarm: legacyHealthAlarm,
+      table: scoreTable,
+      experimentTemplateIds: [experiment.attrId],
     });
 
     // --- ハンドアウト: 参加者が復旧に使う値 (ダッシュボード or 紙で配る) ---
