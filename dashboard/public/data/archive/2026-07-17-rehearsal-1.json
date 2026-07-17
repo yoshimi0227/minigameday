@@ -1,0 +1,375 @@
+{
+  "event": {
+    "title": "ミニ GameDay 通しリハーサル #2 — 自動採点・ランダム発火",
+    "date": "2026-07-17",
+    "team": "solo (リハーサル)",
+    "note": "本番モードの通しリハーサル: ランダム遅延 (2-4 分) → 自動記録 → 検知宣言 → 自動採点 → スコア 60 到達で次の障害を自動発火"
+  },
+  "systems": [
+    {
+      "id": "gameday-main",
+      "name": "本体 (GamedayStack)",
+      "summary": "GameDay のお題となる 3 層 Web アプリ。トップページ \"/\" は Aurora に SELECT 1 を打ち、可否で 200/503 を返す。VPC は 2 AZ で、各層が専用サブネット (public / app / data) に分かれる。",
+      "scenarioIds": [
+        "scenario-01",
+        "scenario-02"
+      ],
+      "tiers": [
+        {
+          "name": "利用者・外形監視",
+          "nodes": [
+            {
+              "service": "利用者",
+              "icon": "users",
+              "label": "HTTP でトップページへ"
+            },
+            {
+              "service": "Synthetics canary",
+              "icon": "synthetics",
+              "label": "gameday-top — 1 分間隔で \"/\" を外形監視 (Playwright)"
+            }
+          ]
+        },
+        {
+          "name": "Web/LB 層 — public サブネット",
+          "icon": "public-subnet",
+          "nodes": [
+            {
+              "service": "ALB",
+              "icon": "alb",
+              "label": "internet-facing / HTTP:80。ヘルスチェックは /healthz (DB 非依存)"
+            }
+          ]
+        },
+        {
+          "name": "アプリ層 — app サブネット",
+          "icon": "private-subnet",
+          "nodes": [
+            {
+              "service": "ECS Fargate",
+              "icon": "fargate",
+              "count": 2,
+              "label": "Node アプリ。desiredCount=2 / minHealthyPercent=50 (1 タスク落ちても継続)"
+            }
+          ]
+        },
+        {
+          "name": "データ層 — data (隔離) サブネット",
+          "icon": "private-subnet",
+          "nodes": [
+            {
+              "service": "Aurora MySQL Serverless v2",
+              "icon": "aurora",
+              "label": "writer + reader (別 AZ)。認証情報は Secrets Manager 経由"
+            }
+          ]
+        }
+      ],
+      "notes": [
+        "判断の起点は canary: 緑のまま = ユーザー影響なし。主要メトリクスは CloudWatch ダッシュボード gameday-review に揃っている",
+        "\"/\" は読み取り (SELECT 1) だけなので、書き込み断は canary では見えない (scenario-02 の学び)",
+        "全 FIS 実験の安全装置としてアラーム gameday-5xx-stop-condition (ELB+Target 5xx > 10/分) が停止条件に入っている"
+      ]
+    },
+    {
+      "id": "gameday-legacy",
+      "name": "レガシー (GameDay-Legacy)",
+      "summary": "scenario-03 の出発点となる、あえて壊れやすくした別スタック。アプリは本体と同じコンテナイメージだが、単一 EC2 上の Docker で動く (Auto Scaling なし = SPOF)。復旧時は参加者が同じイメージを ECS (Fargate) に載せ替える。",
+      "scenarioIds": [
+        "scenario-03"
+      ],
+      "tiers": [
+        {
+          "name": "利用者・外形監視",
+          "nodes": [
+            {
+              "service": "利用者",
+              "icon": "users",
+              "label": "HTTP でトップページへ"
+            },
+            {
+              "service": "Synthetics canary",
+              "icon": "synthetics",
+              "label": "gameday-legacy-top — 1 分間隔。赤いままの時間が復旧作業の進行表示になる"
+            }
+          ]
+        },
+        {
+          "name": "Web/LB 層 — public サブネット",
+          "icon": "public-subnet",
+          "nodes": [
+            {
+              "service": "ALB",
+              "icon": "alb",
+              "label": "ターゲットグループは ip 型 (EC2 の私設 IP も復旧後の Fargate も載る)"
+            }
+          ]
+        },
+        {
+          "name": "アプリ層 — app サブネット",
+          "icon": "private-subnet",
+          "nodes": [
+            {
+              "service": "EC2 (t3.micro)",
+              "icon": "ec2",
+              "label": "単一インスタンス = SPOF。user data の Docker でアプリを起動"
+            }
+          ],
+          "note": "HealthyHostCount = 1 が SPOF の証拠。復旧材料 (ECR イメージ / ECS クラスタ gameday-rebuild / タスク実行ロール / 共有 SG / ロググループ) は事前に用意済み"
+        },
+        {
+          "name": "データ層 — data (隔離) サブネット",
+          "icon": "private-subnet",
+          "nodes": [
+            {
+              "service": "Aurora MySQL Serverless v2",
+              "icon": "aurora",
+              "label": "writer のみ (このシナリオに DB 冗長は不要)"
+            }
+          ]
+        }
+      ],
+      "notes": [
+        "本体スタックとは独立して deploy / destroy できる自己完結スタック",
+        "復旧に必要な値 (イメージ URI / SG / サブネット / ロール ARN 等) は CloudFormation Outputs をハンドアウトとして配る"
+      ]
+    },
+    {
+      "id": "gameday-dr",
+      "name": "DR 構成 (scenario-04 予定)",
+      "summary": "scenario-04 (東京リージョン障害の模擬 → 大阪へ DR 切替) 用のウォームスタンバイ構成。シナリオは draft で前提インフラは未構築。DR 発動で切り替えるのは「入口 (Route 53)」と「データ (Aurora Global Database)」の 2 箇所だけ。",
+      "scenarioIds": [
+        "scenario-04"
+      ],
+      "tiers": [
+        {
+          "name": "入口",
+          "nodes": [
+            {
+              "service": "Route 53",
+              "icon": "route53",
+              "label": "app.<domain> の ALIAS が東京 ALB を指す。DR 発動でここを大阪へ切り替える"
+            },
+            {
+              "service": "Synthetics canary",
+              "icon": "synthetics",
+              "label": "gameday-top — 向き先を ALB DNS 名から Route 53 レコード名に変更"
+            }
+          ]
+        },
+        {
+          "name": "東京 ap-northeast-1 (プライマリ)",
+          "icon": "region",
+          "nodes": [
+            {
+              "service": "ALB",
+              "icon": "alb"
+            },
+            {
+              "service": "ECS Fargate",
+              "icon": "fargate",
+              "count": 2
+            },
+            {
+              "service": "Aurora Global Database",
+              "icon": "aurora",
+              "label": "プライマリクラスタ"
+            }
+          ]
+        },
+        {
+          "name": "大阪 ap-northeast-3 (ウォームスタンバイ)",
+          "icon": "region",
+          "nodes": [
+            {
+              "service": "ALB",
+              "icon": "alb"
+            },
+            {
+              "service": "ECS Fargate",
+              "icon": "fargate",
+              "count": 1,
+              "label": "縮小構成で常時稼働"
+            },
+            {
+              "service": "Aurora Global Database",
+              "icon": "aurora",
+              "label": "セカンダリ。DR 発動でライターへ昇格"
+            }
+          ],
+          "note": "Aurora Global Database がストレージレベルで東京→大阪へレプリケーション (AuroraGlobalDBReplicationLag < 1 秒)"
+        }
+      ],
+      "notes": [
+        "RTO は canary の赤→緑で実測、RPO はフェイルオーバー時点のレプリケーション遅延で実測する"
+      ]
+    }
+  ],
+  "injects": [
+    {
+      "id": "inject-r1",
+      "scenarioId": "scenario-01",
+      "time": "21:22",
+      "title": "Fargate タスク停止 (遅延ランダム)",
+      "instruction": "運営が gameday-stop-one-task を開始。障害の発生時刻は 2〜4 分後のどこか (参加者には知らされない)。ユーザー影響の有無を判断し、検知を宣言して対応する。",
+      "response": "21:23 ヘルスアラーム ALARM を確認し 21:24 に検知宣言 (52 秒)。ECS イベントでタスク 1 停止と自己回復を確認し、静観を選択。21:24 アラーム OK で復旧確認。",
+      "status": "recovered",
+      "maxScore": 100,
+      "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
+      "hints": [
+        {
+          "id": "hr1-1",
+          "label": "方針",
+          "cost": 5,
+          "text": "まず canary の成功率と ALB のターゲット状態を見る。"
+        }
+      ],
+      "experimentId": "EXPPWSuJPJHCSL4as4",
+      "experimentStartedAt": "2026-07-17T12:20:00Z",
+      "impactStartAt": "2026-07-17T12:23:26Z",
+      "recoveredAt": "2026-07-17T12:23:49Z",
+      "recoveryMinutes": 0.4,
+      "ackAt": "2026-07-17T12:24:18.565Z",
+      "detectionMinutes": 0.9,
+      "notes": "検知・復旧は自動記録 (検知 0.9 分 / 復旧 0.4 分)。伝達: 宣言は速いがタイムライン記録は事後 → 10/20。",
+      "commsScore": 10
+    },
+    {
+      "id": "inject-r2",
+      "scenarioId": "scenario-02",
+      "time": "21:26",
+      "title": "Aurora フェイルオーバー (自動発火)",
+      "instruction": "スコア 60 到達で自動発火するエスカレーション。書き込み断の検知と影響説明を行う。",
+      "response": "21:26 スコア 80 到達で自動発火 (armed 表示)。21:28 頃フェイルオーバー発生も canary は green のまま = 参加者は影響を観測できず。RDS イベ메까지は見に行けなかった。",
+      "status": "partial",
+      "maxScore": 100,
+      "experimentTemplateId": "EXTEkjnq8CnhTwP5r",
+      "experimentId": "EXPLBQwtHG1BuWUyhC",
+      "experimentStartedAt": "2026-07-17T12:30:30Z",
+      "score": 50,
+      "notes": "canary 死角 (読み取りプローブ + 1 分間隔 vs 約43秒の切替) のため自動採点不成立 → 手動採点 50/100。検知経路が無かったことが本質 (前回リハーサルの再確認)。"
+    }
+  ],
+  "feedback": [
+    {
+      "type": "keep",
+      "scenarioId": null,
+      "author": "運営",
+      "comment": "events[] の機械記録だけでタイムライン表が書けた。「いつ気づいたか」を記憶に頼らない振り返りが成立する。"
+    },
+    {
+      "type": "problem",
+      "scenarioId": "scenario-02",
+      "author": "運営",
+      "comment": "フェイルオーバーは今回も canary に映らず自動採点不成立。書き込みプローブが無いと scenario-02 は本番モードに乗らない。"
+    },
+    {
+      "type": "try",
+      "scenarioId": null,
+      "author": "運営",
+      "comment": "次回はブラウザからの検知宣言 (ボタン) と、タスク全停止など「本当に見える」障害で通す。"
+    }
+  ],
+  "hintReveals": [],
+  "scoring": {
+    "detection": {
+      "maxPoints": 40,
+      "fullWithinMinutes": 2,
+      "zeroAfterMinutes": 15
+    },
+    "recovery": {
+      "maxPoints": 40,
+      "fullWithinMinutes": 5,
+      "zeroAfterMinutes": 30
+    },
+    "commsMaxPoints": 20
+  },
+  "events": [
+    {
+      "key": "EVENT#2026-07-17T12:20:00Z#83a537ff-cedf-6a40-f70d-c9d4c3c5c48a",
+      "type": "experiment",
+      "at": "2026-07-17T12:20:00Z",
+      "experimentId": "EXPPWSuJPJHCSL4as4",
+      "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-17T12:23:15Z#696e3e5f-ff24-878e-7439-cbbac5b316fd",
+      "type": "experiment",
+      "at": "2026-07-17T12:23:15Z",
+      "experimentId": "EXPPWSuJPJHCSL4as4",
+      "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
+      "status": "completed"
+    },
+    {
+      "key": "EVENT#2026-07-17T12:23:26Z#6da57d08-7b56-3fd7-cb33-5c21735caaf8",
+      "type": "alarm",
+      "at": "2026-07-17T12:23:26Z",
+      "alarmName": "gameday-canary-health",
+      "state": "ALARM",
+      "reason": "GameDay rehearsal: simulated visible impact"
+    },
+    {
+      "key": "EVENT#2026-07-17T12:23:49Z#cfa481a3-34a6-24a5-fc85-475e94c8c15e",
+      "type": "alarm",
+      "at": "2026-07-17T12:23:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "OK",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 12:22:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
+    },
+    {
+      "key": "ACK#inject-r1",
+      "type": "ack",
+      "at": "2026-07-17T12:24:18.565Z",
+      "injectId": "inject-r1"
+    },
+    {
+      "key": "EVENT#2026-07-17T12:30:30Z#1f8a1c2d-648a-3233-542a-b5e8a53a9f76",
+      "type": "experiment",
+      "at": "2026-07-17T12:30:30Z",
+      "experimentId": "EXPLBQwtHG1BuWUyhC",
+      "experimentTemplateId": "EXTEkjnq8CnhTwP5r",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-17T12:33:44Z#6849c47b-db68-acde-d7ff-b8522d25a516",
+      "type": "experiment",
+      "at": "2026-07-17T12:33:44Z",
+      "experimentId": "EXPLBQwtHG1BuWUyhC",
+      "experimentTemplateId": "EXTEkjnq8CnhTwP5r",
+      "status": "completed"
+    }
+  ],
+  "review": {
+    "generatedAt": "2026-07-17T12:45:00Z",
+    "overall": "本番モードの全連鎖 (ランダム発火 → 自動記録 → 検知宣言 → 自動採点 → スコア到達で次の障害) が人手の採点なしで一巡した。壊れたのは境界 (Lambda バンドルと IAM) だけで、記録・導出・採点の設計は無傷。次回は canary の書き込みプローブを足し、scenario-02 も自動採点の土俵に乗せる。",
+    "reportPath": "retrospectives/2026-07-17-rehearsal-2.md",
+    "injects": [
+      {
+        "injectId": "inject-r1",
+        "headline": "検知 0.9 分・復旧 0.4 分 — 機械記録どおりの満点圏",
+        "commentary": "実験開始 12:20 に armed、待機 2 分後の障害から 12:23:26 に影響開始 (模擬 ALARM)。宣言は 52 秒後で検知 40/40、アラーム OK 復帰で復旧 40/40、伝達は記録が事後だったため 10/20 = 素点 90。ヒント未使用。静観の判断も ECS の自己回復 (drift ゼロ) と整合していた。",
+        "wentWell": [
+          "armed 表示中に「いつ来るか分からない」緊張感が保てた",
+          "宣言 → 採点までダッシュボード操作以外の人手ゼロ"
+        ],
+        "toImprove": [
+          "宣言が復旧より後になった — 影響開始の一報をまず宣言する癖をつける"
+        ]
+      },
+      {
+        "injectId": "inject-r2",
+        "headline": "スコア 80 で自動発火 — ただし canary 死角で自動採点は不成立",
+        "commentary": "12:26 スコア 80 が閾値 60 を超え escalator が発火 (初回は fis:TagResource 不足で失敗 → 修正後 12:30 に発火)。12:30:30 に inject-r2 が自動で armed になり、2 分後に Aurora フェイルオーバー実行。canary は終始 100% で影響を観測できず、設計どおり手動採点へフォールバック (50/100)。検知経路が無かったことが本質。",
+        "wentWell": [
+          "エスカレーションの冪等クレームと自動 armed 表示が設計どおり",
+          "手動確定ステータスを自動導出が上書きしないことを実地確認"
+        ],
+        "toImprove": [
+          "書き込みプローブを canary に追加して切替を可視化する",
+          "RDS イベント/DatabaseConnections を見る動線をハンドアウトに足す"
+        ]
+      }
+    ]
+  }
+}

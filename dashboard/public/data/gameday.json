@@ -1,10 +1,22 @@
 {
   "event": {
-    "title": "ミニ GameDay 通しリハーサル #2 — 自動採点・ランダム発火",
+    "title": "ミニ GameDay リハーサル #3 — 2 ラウンド制 (観察 → 対応)",
     "date": "2026-07-17",
     "team": "solo (リハーサル)",
-    "note": "本番モードの通しリハーサル: ランダム遅延 (2-4 分) → 自動記録 → 検知宣言 → 自動採点 → スコア 60 到達で次の障害を自動発火"
+    "note": "R1 観察 (自己回復) → R2 対応 (自己回復しない。人が desiredCount を戻すまで復旧しない)"
   },
+  "rounds": [
+    {
+      "round": 1,
+      "title": "観察ラウンド",
+      "description": "自己回復する障害。静観・判断の練習"
+    },
+    {
+      "round": 2,
+      "title": "対応ラウンド",
+      "description": "自己回復しない障害。人が直すまで復旧しない"
+    }
+  ],
   "systems": [
     {
       "id": "gameday-main",
@@ -207,47 +219,58 @@
   ],
   "injects": [
     {
-      "id": "inject-r1",
+      "id": "r1-stop",
       "scenarioId": "scenario-01",
-      "time": "21:22",
-      "title": "Fargate タスク停止 (遅延ランダム)",
-      "instruction": "運営が gameday-stop-one-task を開始。障害の発生時刻は 2〜4 分後のどこか (参加者には知らされない)。ユーザー影響の有無を判断し、検知を宣言して対応する。",
-      "response": "21:23 ヘルスアラーム ALARM を確認し 21:24 に検知宣言 (52 秒)。ECS イベントでタスク 1 停止と自己回復を確認し、静観を選択。21:24 アラーム OK で復旧確認。",
-      "status": "recovered",
+      "round": 1,
+      "time": "(前回検証済)",
+      "title": "タスク停止 (観察)",
+      "instruction": "R1: Fargate タスクを 1 つ停止。自己回復するので静観が正解になりうる。",
+      "response": "R1 観察ラウンドの見本。タスク停止は約 30 秒で自己回復し canary は緑を維持 → 静観が正解 (リハーサル #2 で実測済み)。",
+      "status": "success",
       "maxScore": 100,
       "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
-      "hints": [
-        {
-          "id": "hr1-1",
-          "label": "方針",
-          "cost": 5,
-          "text": "まず canary の成功率と ALB のターゲット状態を見る。"
-        }
-      ],
       "experimentId": "EXPPWSuJPJHCSL4as4",
       "experimentStartedAt": "2026-07-17T12:20:00Z",
       "impactStartAt": "2026-07-17T12:23:26Z",
       "recoveredAt": "2026-07-17T12:23:49Z",
       "recoveryMinutes": 0.4,
-      "ackAt": "2026-07-17T12:24:18.565Z",
-      "detectionMinutes": 0.9,
-      "notes": "検知・復旧は自動記録 (検知 0.9 分 / 復旧 0.4 分)。伝達: 宣言は速いがタイムライン記録は事後 → 10/20。",
-      "commsScore": 10
+      "score": 90,
+      "notes": "R1 は「壊れても待てば戻る」。復旧 40 点は待てば入り、検知の速さと伝達で差がつく。"
     },
     {
-      "id": "inject-r2",
-      "scenarioId": "scenario-02",
-      "time": "21:26",
-      "title": "Aurora フェイルオーバー (自動発火)",
-      "instruction": "スコア 60 到達で自動発火するエスカレーション。書き込み断の検知と影響説明を行う。",
-      "response": "21:26 スコア 80 到達で自動発火 (armed 表示)。21:28 頃フェイルオーバー発生も canary は green のまま = 参加者は影響を観測できず。RDS イベ메까지は見に行けなかった。",
-      "status": "partial",
+      "id": "r2-scale",
+      "scenarioId": "scenario-05",
+      "round": 2,
+      "time": "22:48",
+      "title": "desiredCount=0 (対応)",
+      "instruction": "R2: Fargate を desiredCount=0 に落とす。自己回復しない。参加者が 2 に戻すまで復旧しない。",
+      "response": "22:50 に desiredCount=0 で 503。22:52 canary ALARM を検知して宣言 (24 秒)。ECS の desiredCount/RunningTaskCount を確認し、放置しても戻らないことを確認 → update-service で desiredCount を 2 に戻して復旧 (22:52)。",
+      "status": "recovered",
       "maxScore": 100,
-      "experimentTemplateId": "EXTEkjnq8CnhTwP5r",
-      "experimentId": "EXPLBQwtHG1BuWUyhC",
-      "experimentStartedAt": "2026-07-17T12:30:30Z",
-      "score": 50,
-      "notes": "canary 死角 (読み取りプローブ + 1 分間隔 vs 約43秒の切替) のため自動採点不成立 → 手動採点 50/100。検知経路が無かったことが本質 (前回リハーサルの再確認)。"
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "hints": [
+        {
+          "id": "hr2-1",
+          "label": "方針",
+          "cost": 5,
+          "text": "ECS サービスの desiredCount と RunningTaskCount を見る。"
+        },
+        {
+          "id": "hr2-2",
+          "label": "具体手順",
+          "cost": 20,
+          "text": "aws ecs update-service --desired-count 2 で戻す。"
+        }
+      ],
+      "experimentId": "EXPqbHCZVQ2Ezg5A6n",
+      "experimentStartedAt": "2026-07-17T13:41:17Z",
+      "impactStartAt": "2026-07-17T13:51:49Z",
+      "ackAt": "2026-07-17T13:52:13.229Z",
+      "detectionMinutes": 0.4,
+      "notes": "自己回復しない障害の実証。検知 0.4 分 / 復旧 3 分は「人が戻す」対応時間そのもの。伝達: 宣言→操作は速いが記録は事後 → 12/20。",
+      "commsScore": 12,
+      "recoveredAt": "2026-07-17T14:06:07Z",
+      "recoveryMinutes": 14.3
     }
   ],
   "feedback": [
@@ -255,19 +278,19 @@
       "type": "keep",
       "scenarioId": null,
       "author": "運営",
-      "comment": "events[] の機械記録だけでタイムライン表が書けた。「いつ気づいたか」を記憶に頼らない振り返りが成立する。"
+      "comment": "2 ラウンド制で「観察 (静観が正解)」と「対応 (人が直す)」を分けたことで、R2 は MTTR が本当に人の対応時間を測るようになった。"
     },
     {
       "type": "problem",
-      "scenarioId": "scenario-02",
+      "scenarioId": "scenario-05",
       "author": "運営",
-      "comment": "フェイルオーバーは今回も canary に映らず自動採点不成立。書き込みプローブが無いと scenario-02 は本番モードに乗らない。"
+      "comment": "FIS の SSM automation は documentArn の形式 (document/) と実験ロールの SSM 権限で 2 回踏んだ。ネイティブでない操作は実機一巡が必須。"
     },
     {
       "type": "try",
-      "scenarioId": null,
+      "scenarioId": "scenario-03",
       "author": "運営",
-      "comment": "次回はブラウザからの検知宣言 (ボタン) と、タスク全停止など「本当に見える」障害で通す。"
+      "comment": "legacy の EC2 rebuild を通しで (30〜60 分) やる回を設ける。イベント記録のクロススタック書き込みは確認済み。"
     }
   ],
   "hintReveals": [],
@@ -286,88 +309,102 @@
   },
   "events": [
     {
-      "key": "EVENT#2026-07-17T12:20:00Z#83a537ff-cedf-6a40-f70d-c9d4c3c5c48a",
+      "key": "EVENT#2026-07-17T13:41:17Z#7fd2fd4c-ba61-d1cc-aecf-217606760085",
       "type": "experiment",
-      "at": "2026-07-17T12:20:00Z",
-      "experimentId": "EXPPWSuJPJHCSL4as4",
-      "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
+      "at": "2026-07-17T13:41:17Z",
+      "experimentId": "EXPqbHCZVQ2Ezg5A6n",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
       "status": "running"
     },
     {
-      "key": "EVENT#2026-07-17T12:23:15Z#696e3e5f-ff24-878e-7439-cbbac5b316fd",
+      "key": "EVENT#2026-07-17T13:43:32Z#d0f4db4f-4754-db3a-76c4-b0ab0160da24",
       "type": "experiment",
-      "at": "2026-07-17T12:23:15Z",
-      "experimentId": "EXPPWSuJPJHCSL4as4",
-      "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
+      "at": "2026-07-17T13:43:32Z",
+      "experimentId": "EXPqbHCZVQ2Ezg5A6n",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "failed"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:48:05Z#7d64b23e-0093-61fc-9b1c-9c8af12c588e",
+      "type": "experiment",
+      "at": "2026-07-17T13:48:05Z",
+      "experimentId": "EXPEwhn2Jvumj4DCcz",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:51:00Z#2052360e-51bf-f26f-c804-5a3ebaac2069",
+      "type": "experiment",
+      "at": "2026-07-17T13:51:00Z",
+      "experimentId": "EXPEwhn2Jvumj4DCcz",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
       "status": "completed"
     },
     {
-      "key": "EVENT#2026-07-17T12:23:26Z#6da57d08-7b56-3fd7-cb33-5c21735caaf8",
+      "key": "EVENT#2026-07-17T13:51:49Z#61679133-159e-435e-e839-3145432eeeb5",
       "type": "alarm",
-      "at": "2026-07-17T12:23:26Z",
+      "at": "2026-07-17T13:51:49Z",
       "alarmName": "gameday-canary-health",
       "state": "ALARM",
-      "reason": "GameDay rehearsal: simulated visible impact"
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [0.0 (17/07/26 13:50:00)] was less than the threshold (100.0) (minimum 1 datapoint for OK -> ALARM transition)."
     },
     {
-      "key": "EVENT#2026-07-17T12:23:49Z#cfa481a3-34a6-24a5-fc85-475e94c8c15e",
+      "key": "ACK#r2-scale",
+      "type": "ack",
+      "at": "2026-07-17T13:52:13.229Z",
+      "injectId": "r2-scale"
+    },
+    {
+      "key": "EVENT#2026-07-17T13:54:49Z#53bc8f9a-0ec8-b9f7-acb0-9d05028dfcd4",
       "type": "alarm",
-      "at": "2026-07-17T12:23:49Z",
+      "at": "2026-07-17T13:54:49Z",
       "alarmName": "gameday-canary-health",
       "state": "OK",
-      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 12:22:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 13:53:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
     },
     {
-      "key": "ACK#inject-r1",
-      "type": "ack",
-      "at": "2026-07-17T12:24:18.565Z",
-      "injectId": "inject-r1"
+      "key": "EVENT#2026-07-17T14:03:07Z#e7822e36-1b68-4b41-f05c-7fd8d4ec7727",
+      "type": "alarm",
+      "at": "2026-07-17T14:03:07Z",
+      "alarmName": "gameday-legacy-canary-health",
+      "state": "ALARM",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [0.0 (17/07/26 14:02:00)] was less than the threshold (100.0) (minimum 1 datapoint for OK -> ALARM transition)."
     },
     {
-      "key": "EVENT#2026-07-17T12:30:30Z#1f8a1c2d-648a-3233-542a-b5e8a53a9f76",
-      "type": "experiment",
-      "at": "2026-07-17T12:30:30Z",
-      "experimentId": "EXPLBQwtHG1BuWUyhC",
-      "experimentTemplateId": "EXTEkjnq8CnhTwP5r",
-      "status": "running"
-    },
-    {
-      "key": "EVENT#2026-07-17T12:33:44Z#6849c47b-db68-acde-d7ff-b8522d25a516",
-      "type": "experiment",
-      "at": "2026-07-17T12:33:44Z",
-      "experimentId": "EXPLBQwtHG1BuWUyhC",
-      "experimentTemplateId": "EXTEkjnq8CnhTwP5r",
-      "status": "completed"
+      "key": "EVENT#2026-07-17T14:06:07Z#36338478-c37b-b5c7-68fd-81b9ec5ca0cd",
+      "type": "alarm",
+      "at": "2026-07-17T14:06:07Z",
+      "alarmName": "gameday-legacy-canary-health",
+      "state": "OK",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (17/07/26 14:05:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
     }
   ],
   "review": {
-    "generatedAt": "2026-07-17T12:45:00Z",
-    "overall": "本番モードの全連鎖 (ランダム発火 → 自動記録 → 検知宣言 → 自動採点 → スコア到達で次の障害) が人手の採点なしで一巡した。壊れたのは境界 (Lambda バンドルと IAM) だけで、記録・導出・採点の設計は無傷。次回は canary の書き込みプローブを足し、scenario-02 も自動採点の土俵に乗せる。",
-    "reportPath": "retrospectives/2026-07-17-rehearsal-2.md",
+    "generatedAt": "2026-07-17T14:05:00Z",
+    "overall": "2 ラウンド制が実機で成立した。R1 観察 (自己回復) は待てば戻り、R2 対応 (scale-to-zero) は desiredCount=0 のまま自己回復せず、参加者が戻すまで canary は赤 = MTTR が対応速度を実測した。新機能の実装で踏んだ罠 (SSM automation の documentArn 形式・実験ロール権限) はすべて実機一巡で回収し、検証済みメモに反映した。",
+    "reportPath": "retrospectives/2026-07-17-rehearsal-3.md",
     "injects": [
       {
-        "injectId": "inject-r1",
-        "headline": "検知 0.9 分・復旧 0.4 分 — 機械記録どおりの満点圏",
-        "commentary": "実験開始 12:20 に armed、待機 2 分後の障害から 12:23:26 に影響開始 (模擬 ALARM)。宣言は 52 秒後で検知 40/40、アラーム OK 復帰で復旧 40/40、伝達は記録が事後だったため 10/20 = 素点 90。ヒント未使用。静観の判断も ECS の自己回復 (drift ゼロ) と整合していた。",
+        "injectId": "r1-stop",
+        "headline": "R1 観察: 静観が正解 (自己回復)",
+        "commentary": "タスク停止は約 30 秒で ECS が自己回復し canary は緑を維持。復旧 40 点は待てば入る = 観察ラウンドは検知の速さと伝達で差がつく。リハーサル #2 で実測済みの見本。",
         "wentWell": [
-          "armed 表示中に「いつ来るか分からない」緊張感が保てた",
-          "宣言 → 採点までダッシュボード操作以外の人手ゼロ"
+          "「壊れても待てば戻る」を体感する導入として機能"
         ],
         "toImprove": [
-          "宣言が復旧より後になった — 影響開始の一報をまず宣言する癖をつける"
+          "R1 は自動採点の復旧点が甘くなる。観察ラウンドは判断の質 (静観の宣言) を伝達点で見る"
         ]
       },
       {
-        "injectId": "inject-r2",
-        "headline": "スコア 80 で自動発火 — ただし canary 死角で自動採点は不成立",
-        "commentary": "12:26 スコア 80 が閾値 60 を超え escalator が発火 (初回は fis:TagResource 不足で失敗 → 修正後 12:30 に発火)。12:30:30 に inject-r2 が自動で armed になり、2 分後に Aurora フェイルオーバー実行。canary は終始 100% で影響を観測できず、設計どおり手動採点へフォールバック (50/100)。検知経路が無かったことが本質。",
+        "injectId": "r2-scale",
+        "headline": "R2 対応: 人が desiredCount を戻すまで復旧しない",
+        "commentary": "SSM automation で desiredCount=0 → ALB 503 → canary が本物の ALARM。実験は completed でも desiredCount は 0 のまま (自己回復しない)。検知宣言 (0.4 分) 後、放置しても戻らないことを確認し update-service で 2 に戻して復旧 (MTTR 3 分)。この 3 分は「人が動いた時間」そのもの。",
         "wentWell": [
-          "エスカレーションの冪等クレームと自動 armed 表示が設計どおり",
-          "手動確定ステータスを自動導出が上書きしないことを実地確認"
+          "自己回復しない障害で MTTR が対応速度を実測した",
+          "armed→impacted→検知宣言→復旧→recovered の全遷移が自動記録された"
         ],
         "toImprove": [
-          "書き込みプローブを canary に追加して切替を可視化する",
-          "RDS イベント/DatabaseConnections を見る動線をハンドアウトに足す"
+          "復旧をコンソールでやると desiredCount が 2 に戻り drift は消える。console/CDK の判別は R1・scenario-03 側で見る"
         ]
       }
     ]

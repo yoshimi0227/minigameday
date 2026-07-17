@@ -52,16 +52,34 @@ Claude Code で `add-scenario` スキル(+ `gameday-scenario` エージェント
 `scenarios/NN-<slug>.md` を生成 → `fis-experiment` スキルで `lib/constructs/fault-injection.ts` に実装。
 生成後は必ず `npm run build && npm test && npm run synth:nag` で検証する(詳細は CLAUDE.md / 各スキル)。
 
-### フェーズ3: 障害注入(FIS 実行)
+### フェーズ3: 障害注入(FIS 実行)— 2 ラウンド制
+
+本番の GameDay と同様、障害を性質で 2 ラウンドに分ける(ダッシュボードは `round` でグルーピング表示):
+
+- **R1 観察ラウンド** — 自己回復する障害。静観・判断の練習(壊れても待てば戻る)
+- **R2 対応ラウンド** — 自己回復しない障害。**人が手を動かして直すまで復旧しない**(MTTR が対応速度を実測)
 
 ```bash
+# --- R1 観察ラウンド (自己回復。静観が正解になりうる) ---
 #    シナリオ1: Fargate タスクを1つ停止 (出力 GameDay.FaultInjectionStopTaskTemplateId)
 aws fis start-experiment --experiment-template-id <StopTaskTemplateId>
 #    シナリオ2: Aurora をフェイルオーバー (出力 GameDay.FaultInjectionFailoverDbTemplateId)
 aws fis start-experiment --experiment-template-id <FailoverDbTemplateId>
+
+# --- R2 対応ラウンド (自己回復しない。参加者が直すまで赤のまま) ---
+#    シナリオ5: Fargate を desiredCount=0 に落とす (出力 GameDay.FaultInjectionScaleToZeroTemplateId)
+aws fis start-experiment --experiment-template-id <ScaleToZeroTemplateId>
+#    シナリオ3: 単一 EC2 を terminate → Fargate に作り替えて復旧 (GameDay-Legacy スタック)
+aws fis start-experiment --experiment-template-id <GameDay-Legacy の ExperimentTemplateId>
+
 aws fis get-experiment --id <experiment-id>   # 状態・タイムライン
 #    実験ログは CloudWatch Logs /gameday/fis-experiments に残る (振り返りの素材)
 ```
+
+**R2 の復旧は人手が要る**:
+- **scale-to-zero** → 参加者が desiredCount を 2 に戻す(`aws ecs update-service --cluster <名> --service <名> --desired-count 2` またはコード整合なら `cdk deploy`)。放置しても ECS は戻さない。
+- **EC2 rebuild** (scenario-03) → 参加者が同じイメージを Fargate + ALB に組み直す(ハンドアウトの CfnOutput を使う)。詳細は `scenarios/03-ec2-to-ecs-rebuild.md` / `scenarios/05-scale-to-zero.md`。
+- **GameDay-Legacy は GameDay の後にデプロイする**(canary イベントを本体の `gameday-score` テーブルに名前参照で書くため。テーブルは GamedayStack が作る)。
 
 **障害開始を遅らせる**: デプロイ時に `-c faultDelayMinutes=5` を渡すと、各実験の先頭に
 `aws:fis:wait` (5 分) が入る。`start-experiment` を叩くと実験は「実行中(待機)」になり、
