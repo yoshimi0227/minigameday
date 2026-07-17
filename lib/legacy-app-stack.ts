@@ -15,6 +15,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { GameEvents } from './constructs/game-events';
+import { LOG_DELIVERY_ACTIONS } from './constructs/fault-injection';
 
 /**
  * scenario-03 (単一 EC2 の突然死 → ECS への作り替えで復旧) の出発点スタック。
@@ -192,6 +193,16 @@ export class LegacyAppStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+    // 実験ログ配信 (vended log delivery) の権限。本体スタックの FIS ロールと同じ
+    fisRole.addToPolicy(new iam.PolicyStatement({ actions: LOG_DELIVERY_ACTIONS, resources: ['*'] }));
+
+    // 実験ログ: 実験タイムライン・アクション詳細を CloudWatch Logs に残す (振り返りの素材)。
+    // ロググループ名は本体の /gameday/fis-experiments と別にする (同名はアカウント内で衝突する)
+    const experimentLogs = new logs.LogGroup(this, 'ExperimentLogs', {
+      logGroupName: '/gameday/legacy-fis-experiments',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     // 実験レポート (PDF) の配信先と、レポート生成に必要な権限
     const reportBucket = new s3.Bucket(this, 'FisReportBucket', {
@@ -204,7 +215,7 @@ export class LegacyAppStack extends cdk.Stack {
     });
     // レポート配信には s3:GetObject + s3:PutObject の両方が要る (grantWrite だけでは足りない)。
     // AWS 推奨に従いレポートのプレフィックスに限定する。
-    reportBucket.grantReadWrite(fisRole, 'scenario-03/*');
+    reportBucket.grants.readWrite(fisRole, 'scenario-03/*');
     fisRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['cloudwatch:GetMetricWidgetImage', 'cloudwatch:GetDashboard'],
@@ -221,6 +232,9 @@ export class LegacyAppStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
+      // 毎分の canary がスクショ/ログを吐き続ける。周回リセット運用 (destroy しない) だと
+      // 溜まる一方なので 7 日で失効させる (振り返りは直近ぶんで足りる)
+      lifecycleRules: [{ expiration: cdk.Duration.days(7) }],
     });
     const canary = new synthetics.Canary(this, 'LegacyCanary', {
       canaryName: 'gameday-legacy-top',
@@ -275,6 +289,13 @@ export class LegacyAppStack extends cdk.Stack {
           description: 'Terminate the single SPOF EC2 instance',
           targets: { Instances: 'SpofInstance' },
         },
+      },
+      // 実験ログ。ハマりどころは本体 (fault-injection.ts) と同じ: FIS は末尾 ':*' 付きの
+      // log-group ARN を要求し、cloudWatchLogsConfiguration は any 型のため CFN プロパティ名
+      // LogGroupArn (PascalCase) をそのまま書く。logSchemaVersion は必須 (現行 2)。
+      logConfiguration: {
+        cloudWatchLogsConfiguration: { LogGroupArn: experimentLogs.logGroupArn },
+        logSchemaVersion: 2,
       },
       // terminate はワンショットで実験は数十秒で completed になる。復旧までの長い観測は
       // postExperimentDuration (上限 2h) でレポート窓に収める。aws:fis:wait は足さない。

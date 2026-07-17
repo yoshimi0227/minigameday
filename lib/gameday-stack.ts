@@ -44,6 +44,8 @@ export class GamedayStack extends cdk.Stack {
       databaseCluster: targetApp.databaseCluster,
       service: targetApp.service,
       cluster: targetApp.cluster,
+      serviceDesiredCount: targetApp.serviceDesiredCount,
+      reviewDashboardArn: observability.dashboardArn,
       faultDelayMinutes: faultDelayRaw,
     });
 

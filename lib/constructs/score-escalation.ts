@@ -91,7 +91,7 @@ export class ScoreEscalation extends Construct {
     });
 
     // 冪等クレーム (FIRED#<id> の条件付き PutItem) 用の書き込み権限
-    table.grantWriteData(escalator);
+    table.grants.writeData(escalator);
 
     // FIS 実験を開始する権限。開始で作られる experiment は生成 ID なので experiment/* が要る。
     // 対象はこのアカウント/リージョンの実験テンプレート・実験に限定 (grant 相当の最小)。

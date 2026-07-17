@@ -22,12 +22,14 @@ export class TargetApp extends Construct {
   public readonly cluster: ecs.ICluster;
   public readonly service: ecs.IFargateService;
   public readonly loadBalancer: elbv2.IApplicationLoadBalancer;
-  public readonly targetGroup: elbv2.ApplicationTargetGroup;
+  public readonly targetGroup: elbv2.IApplicationTargetGroup;
   public readonly databaseCluster: rds.IDatabaseCluster;
 
   /** FIS がタグでタスクを選択するためのキー/値 */
   public readonly targetTagKey = 'GameDayTarget';
   public readonly targetTagValue = 'true';
+  /** サービスの定義上の desiredCount。scale-to-zero backstop の復元値もこれに揃える */
+  public readonly serviceDesiredCount = 2;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -96,7 +98,7 @@ export class TargetApp extends Construct {
     const service = new ecs.FargateService(this, 'Service', {
       cluster,
       taskDefinition,
-      desiredCount: 2, // 1 タスク落としても冗長性を観察できるよう 2
+      desiredCount: this.serviceDesiredCount, // 1 タスク落としても冗長性を観察できるよう 2
       minHealthyPercent: 50, // デプロイ/障害時に最低 1 タスクは維持
       circuitBreaker: { rollback: true }, // 起動失敗を素早く検知してロールバック
       // サービスのタグをタスクに伝播させ、FIS がタグで対象を選べるようにする

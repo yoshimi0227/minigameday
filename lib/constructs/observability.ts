@@ -10,7 +10,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 export interface ObservabilityProps {
   // インターフェース型で受け取る (awscdk/no-construct-in-interface)
   readonly loadBalancer: elbv2.IApplicationLoadBalancer;
-  readonly targetGroup: elbv2.ApplicationTargetGroup;
+  readonly targetGroup: elbv2.IApplicationTargetGroup;
   readonly databaseCluster: rds.IDatabaseCluster;
 }
 
@@ -23,6 +23,8 @@ export interface ObservabilityProps {
 export class Observability extends Construct {
   public readonly canary: synthetics.ICanary;
   public readonly stopAlarm: cloudwatch.IAlarm;
+  /** 振り返りダッシュボード (gameday-review) の ARN。FIS 実験レポートの dataSources に使う */
+  public readonly dashboardArn: string;
 
   constructor(scope: Construct, id: string, props: ObservabilityProps) {
     super(scope, id);
@@ -39,6 +41,9 @@ export class Observability extends Construct {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
+      // 毎分の canary がスクショ/ログを吐き続ける。周回リセット運用 (destroy しない) だと
+      // 溜まる一方なので 7 日で失効させる (振り返りは直近ぶんで足りる)
+      lifecycleRules: [{ expiration: cdk.Duration.days(7) }],
     });
     const canary = new synthetics.Canary(this, 'TopPageCanary', {
       canaryName: 'gameday-top',
@@ -91,6 +96,7 @@ export class Observability extends Construct {
     const dashboard = new cloudwatch.Dashboard(this, 'ReviewDashboard', {
       dashboardName: 'gameday-review',
     });
+    this.dashboardArn = dashboard.dashboardArn;
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'Canary 成功率 (%)',

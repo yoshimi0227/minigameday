@@ -70,6 +70,31 @@ export class SlackNotify extends Construct {
     healthAlarm.addOkAction(snsAction); // OK    = 復旧     → Slack
     this.healthAlarm = healthAlarm;
 
+    // 監視の空白の検知: healthAlarm は treatMissingData=NOT_BREACHING なので、canary 自体が
+    // 止まる (ランタイム廃止・クォータ・手動停止などでメトリクスが欠測する) と全アラームが
+    // OK のままになり、誰も監視が死んだことに気づけない。SampleCount (5 分間の実行回数) を
+    // 見張り、0 なら BREACHING で運営に知らせる。ゲームの採点イベントには使わない
+    // (GameEvents が拾うのは healthAlarm だけ)。
+    const heartbeatAlarm = new cloudwatch.Alarm(this, 'CanaryHeartbeat', {
+      alarmName: 'gameday-canary-heartbeat',
+      alarmDescription:
+        'GameDay: canary が 5 分間 1 回も実行されていない (監視の空白)。canary の状態を確認する。',
+      metric: new cloudwatch.Metric({
+        namespace: 'CloudWatchSynthetics',
+        metricName: 'SuccessPercent',
+        dimensionsMap: { CanaryName: props.canary.canaryName },
+        statistic: 'SampleCount',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      // 欠測 = canary が動いていない = まさに検知したい状態
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+    heartbeatAlarm.addAlarmAction(snsAction); // 監視停止 → Slack
+    heartbeatAlarm.addOkAction(snsAction); // 監視復帰 → Slack
+
     if (props.slackWorkspaceId && props.slackChannelId) {
       new chatbot.SlackChannelConfiguration(this, 'Slack', {
         slackChannelConfigurationName: 'gameday-incidents',

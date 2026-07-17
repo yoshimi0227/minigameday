@@ -322,6 +322,14 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
             ],
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 7,
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -633,6 +641,15 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
       "Type": "AWS::RDS::DBInstance",
       "UpdateReplacePolicy": "Delete",
     },
+    "ExperimentLogs98E3CD5B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/gameday/legacy-fis-experiments",
+        "RetentionInDays": 7,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
     "FisReportBucketAutoDeleteObjectsCustomResource168D4C0D": {
       "DeletionPolicy": "Delete",
       "DependsOn": [
@@ -799,6 +816,16 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
               "Action": [
                 "ec2:DescribeInstances",
                 "cloudwatch:DescribeAlarms",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "logs:CreateLogDelivery",
+                "logs:PutResourcePolicy",
+                "logs:DescribeResourcePolicies",
+                "logs:DescribeLogGroups",
               ],
               "Effect": "Allow",
               "Resource": "*",
@@ -1015,6 +1042,14 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
           },
           "S3Key": "[ASSET_HASH].zip",
         },
+        "DeadLetterConfig": {
+          "TargetArn": {
+            "Fn::GetAtt": [
+              "GameEventsRecorderDlq6C442AEC",
+              "Arn",
+            ],
+          },
+        },
         "Environment": {
           "Variables": {
             "TABLE_NAME": "gameday-score",
@@ -1036,6 +1071,48 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
         "Timeout": 10,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "GameEventsRecorderDlq6C442AEC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true,
+      },
+      "Type": "AWS::SQS::Queue",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "GameEventsRecorderDlqPolicy090DC4FB": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sqs:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "GameEventsRecorderDlq6C442AEC",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Queues": [
+          {
+            "Ref": "GameEventsRecorderDlq6C442AEC",
+          },
+        ],
+      },
+      "Type": "AWS::SQS::QueuePolicy",
     },
     "GameEventsRecorderLogs53B01156": {
       "DeletionPolicy": "Delete",
@@ -1080,6 +1157,16 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": "sqs:SendMessage",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "GameEventsRecorderDlq6C442AEC",
+                  "Arn",
+                ],
+              },
+            },
             {
               "Action": [
                 "dynamodb:BatchWriteItem",
@@ -1742,6 +1829,17 @@ docker run -d --restart always -p 80:80 -e DB_HOST=",
           },
           "PostExperimentDuration": "PT75M",
           "PreExperimentDuration": "PT10M",
+        },
+        "LogConfiguration": {
+          "CloudWatchLogsConfiguration": {
+            "LogGroupArn": {
+              "Fn::GetAtt": [
+                "ExperimentLogs98E3CD5B",
+                "Arn",
+              ],
+            },
+          },
+          "LogSchemaVersion": 2,
         },
         "RoleArn": {
           "Fn::GetAtt": [
@@ -2444,6 +2542,14 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       },
       "Type": "AWS::IAM::Role",
     },
+    "FaultInjectionBackstopLogsA0AE7F87": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 7,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
     "FaultInjectionExperimentLogs844D302F": {
       "DeletionPolicy": "Delete",
       "Properties": {
@@ -2465,6 +2571,40 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
           },
         },
         "Description": "GameDay: Aurora をフェイルオーバーし、書き込み先切替時の挙動を観察する",
+        "ExperimentReportConfiguration": {
+          "DataSources": {
+            "CloudWatchDashboards": [
+              {
+                "DashboardIdentifier": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":cloudwatch::",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":dashboard/gameday-review",
+                    ],
+                  ],
+                },
+              },
+            ],
+          },
+          "Outputs": {
+            "ExperimentReportS3Configuration": {
+              "BucketName": {
+                "Ref": "FaultInjectionReportBucket12673FCC",
+              },
+              "Prefix": "failover-db/",
+            },
+          },
+          "PostExperimentDuration": "PT10M",
+          "PreExperimentDuration": "PT10M",
+        },
         "LogConfiguration": {
           "CloudWatchLogsConfiguration": {
             "LogGroupArn": {
@@ -2495,6 +2635,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         ],
         "Tags": {
           "Name": "gameday-failover-db",
+          "gameday": "true",
         },
         "Targets": {
           "Clusters": {
@@ -2545,6 +2686,51 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
                 "logs:PutResourcePolicy",
                 "logs:DescribeResourcePolicies",
                 "logs:DescribeLogGroups",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FaultInjectionReportBucket12673FCC",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FaultInjectionReportBucket12673FCC",
+                          "Arn",
+                        ],
+                      },
+                      "/stop-task/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "cloudwatch:GetMetricWidgetImage",
+                "cloudwatch:GetDashboard",
               ],
               "Effect": "Allow",
               "Resource": "*",
@@ -2608,6 +2794,51 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
                 "logs:PutResourcePolicy",
                 "logs:DescribeResourcePolicies",
                 "logs:DescribeLogGroups",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FaultInjectionReportBucket12673FCC",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FaultInjectionReportBucket12673FCC",
+                          "Arn",
+                        ],
+                      },
+                      "/failover-db/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "cloudwatch:GetMetricWidgetImage",
+                "cloudwatch:GetDashboard",
               ],
               "Effect": "Allow",
               "Resource": "*",
@@ -2717,6 +2948,51 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
               "Effect": "Allow",
               "Resource": "*",
             },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FaultInjectionReportBucket12673FCC",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FaultInjectionReportBucket12673FCC",
+                          "Arn",
+                        ],
+                      },
+                      "/scale-to-zero/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "cloudwatch:GetMetricWidgetImage",
+                "cloudwatch:GetDashboard",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
           ],
           "Version": "2012-10-17",
         },
@@ -2728,6 +3004,154 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         ],
       },
       "Type": "AWS::IAM::Policy",
+    },
+    "FaultInjectionReportBucket12673FCC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": {
+          "Fn::Join": [
+            "",
+            [
+              "gameday-fis-reports-",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              "-",
+              {
+                "Ref": "AWS::Region",
+              },
+            ],
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "FaultInjectionReportBucketAutoDeleteObjectsCustomResourceB472890B": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "FaultInjectionReportBucketPolicy44E05311",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "FaultInjectionReportBucket12673FCC",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "FaultInjectionReportBucketPolicy44E05311": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "FaultInjectionReportBucket12673FCC",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FaultInjectionReportBucket12673FCC",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FaultInjectionReportBucket12673FCC",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "FaultInjectionReportBucket12673FCC",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "FaultInjectionReportBucket12673FCC",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
     },
     "FaultInjectionScaleToZero256AE283": {
       "Properties": {
@@ -2790,6 +3214,40 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
           },
         },
         "Description": "GameDay: Fargate を desiredCount=0 に落とす。自己回復しないので参加者が戻すまで復旧しない",
+        "ExperimentReportConfiguration": {
+          "DataSources": {
+            "CloudWatchDashboards": [
+              {
+                "DashboardIdentifier": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":cloudwatch::",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":dashboard/gameday-review",
+                    ],
+                  ],
+                },
+              },
+            ],
+          },
+          "Outputs": {
+            "ExperimentReportS3Configuration": {
+              "BucketName": {
+                "Ref": "FaultInjectionReportBucket12673FCC",
+              },
+              "Prefix": "scale-to-zero/",
+            },
+          },
+          "PostExperimentDuration": "PT30M",
+          "PreExperimentDuration": "PT10M",
+        },
         "LogConfiguration": {
           "CloudWatchLogsConfiguration": {
             "LogGroupArn": {
@@ -2820,6 +3278,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         ],
         "Tags": {
           "Name": "gameday-scale-to-zero",
+          "gameday": "true",
         },
         "Targets": {},
       },
@@ -2869,6 +3328,237 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       },
       "Type": "AWS::IAM::Policy",
     },
+    "FaultInjectionScaleToZeroBackstopD4B25C42": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "FaultInjectionScaleToZeroBackstopRoleDefaultPolicy4F17F9D1",
+        "FaultInjectionScaleToZeroBackstopRole57B5F8B8",
+      ],
+      "Properties": {
+        "DefinitionString": {
+          "Fn::Join": [
+            "",
+            [
+              "{"StartAt":"BackstopWait","States":{"BackstopWait":{"Type":"Wait","Seconds":1800,"Next":"BackstopDescribe"},"BackstopDescribe":{"Next":"BackstopNeeded","Type":"Task","ResultPath":"$.describe","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::aws-sdk:ecs:describeServices","Parameters":{"Cluster":"",
+              {
+                "Ref": "TargetAppClusterFBBD8610",
+              },
+              "","Services":["",
+              {
+                "Fn::GetAtt": [
+                  "TargetAppServiceE810121B",
+                  "Name",
+                ],
+              },
+              ""]}},"BackstopNeeded":{"Type":"Choice","Choices":[{"Variable":"$.describe.Services[0].DesiredCount","NumericEquals":0,"Next":"BackstopRestore"}],"Default":"BackstopNotNeeded"},"BackstopNotNeeded":{"Type":"Succeed"},"BackstopRestore":{"End":true,"Type":"Task","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::aws-sdk:ecs:updateService","Parameters":{"Cluster":"",
+              {
+                "Ref": "TargetAppClusterFBBD8610",
+              },
+              "","Service":"",
+              {
+                "Fn::GetAtt": [
+                  "TargetAppServiceE810121B",
+                  "Name",
+                ],
+              },
+              "","DesiredCount":2}}},"TimeoutSeconds":2700}",
+            ],
+          ],
+        },
+        "LoggingConfiguration": {
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": {
+                  "Fn::GetAtt": [
+                    "FaultInjectionBackstopLogsA0AE7F87",
+                    "Arn",
+                  ],
+                },
+              },
+            },
+          ],
+          "Level": "ALL",
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "FaultInjectionScaleToZeroBackstopRole57B5F8B8",
+            "Arn",
+          ],
+        },
+        "StateMachineName": "gameday-scale-to-zero-backstop",
+        "TracingConfiguration": {
+          "Enabled": true,
+        },
+      },
+      "Type": "AWS::StepFunctions::StateMachine",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "FaultInjectionScaleToZeroBackstopEventsRoleB4F9E616": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "FaultInjectionScaleToZeroBackstopEventsRoleDefaultPolicy26545262": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "states:StartExecution",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "FaultInjectionScaleToZeroBackstopD4B25C42",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FaultInjectionScaleToZeroBackstopEventsRoleDefaultPolicy26545262",
+        "Roles": [
+          {
+            "Ref": "FaultInjectionScaleToZeroBackstopEventsRoleB4F9E616",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "FaultInjectionScaleToZeroBackstopRole57B5F8B8": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "FaultInjectionScaleToZeroBackstopRoleDefaultPolicy4F17F9D1": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "ecs:describeServices",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "TargetAppServiceE810121B",
+              },
+            },
+            {
+              "Action": "ecs:updateService",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "TargetAppServiceE810121B",
+              },
+            },
+            {
+              "Action": [
+                "logs:CreateLogDelivery",
+                "logs:GetLogDelivery",
+                "logs:UpdateLogDelivery",
+                "logs:DeleteLogDelivery",
+                "logs:ListLogDeliveries",
+                "logs:PutResourcePolicy",
+                "logs:DescribeResourcePolicies",
+                "logs:DescribeLogGroups",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": [
+                "xray:PutTraceSegments",
+                "xray:PutTelemetryRecords",
+                "xray:GetSamplingRules",
+                "xray:GetSamplingTargets",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "FaultInjectionScaleToZeroBackstopRoleDefaultPolicy4F17F9D1",
+        "Roles": [
+          {
+            "Ref": "FaultInjectionScaleToZeroBackstopRole57B5F8B8",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "FaultInjectionScaleToZeroBackstopRule6A4E29F9": {
+      "Properties": {
+        "Description": "GameDay: scale-to-zero 実験の終了 30 分後に desiredCount を自動復元する保険",
+        "EventPattern": {
+          "detail": {
+            "experiment-template-id": [
+              {
+                "Fn::GetAtt": [
+                  "FaultInjectionScaleToZero256AE283",
+                  "Id",
+                ],
+              },
+            ],
+            "new-state": {
+              "status": [
+                "completed",
+                "stopped",
+                "failed",
+              ],
+            },
+          },
+          "detail-type": [
+            "FIS Experiment State Change",
+          ],
+          "source": [
+            "aws.fis",
+          ],
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "FaultInjectionScaleToZeroBackstopD4B25C42",
+            },
+            "Id": "Target0",
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "FaultInjectionScaleToZeroBackstopEventsRoleB4F9E616",
+                "Arn",
+              ],
+            },
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
     "FaultInjectionScaleToZeroDoc43454D6F": {
       "Properties": {
         "Content": {
@@ -2917,6 +3607,40 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
           },
         },
         "Description": "GameDay: Fargate タスクを 1 つ停止し、冗長性と回復を観察する",
+        "ExperimentReportConfiguration": {
+          "DataSources": {
+            "CloudWatchDashboards": [
+              {
+                "DashboardIdentifier": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":cloudwatch::",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":dashboard/gameday-review",
+                    ],
+                  ],
+                },
+              },
+            ],
+          },
+          "Outputs": {
+            "ExperimentReportS3Configuration": {
+              "BucketName": {
+                "Ref": "FaultInjectionReportBucket12673FCC",
+              },
+              "Prefix": "stop-task/",
+            },
+          },
+          "PostExperimentDuration": "PT10M",
+          "PreExperimentDuration": "PT10M",
+        },
         "LogConfiguration": {
           "CloudWatchLogsConfiguration": {
             "LogGroupArn": {
@@ -2947,6 +3671,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         ],
         "Tags": {
           "Name": "gameday-stop-one-task",
+          "gameday": "true",
         },
         "Targets": {
           "Tasks": {
@@ -3132,6 +3857,14 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
           },
           "S3Key": "[ASSET_HASH].zip",
         },
+        "DeadLetterConfig": {
+          "TargetArn": {
+            "Fn::GetAtt": [
+              "GameEventsRecorderDlq6C442AEC",
+              "Arn",
+            ],
+          },
+        },
         "Environment": {
           "Variables": {
             "TABLE_NAME": {
@@ -3155,6 +3888,48 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         "Timeout": 10,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "GameEventsRecorderDlq6C442AEC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true,
+      },
+      "Type": "AWS::SQS::Queue",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "GameEventsRecorderDlqPolicy090DC4FB": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sqs:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "GameEventsRecorderDlq6C442AEC",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Queues": [
+          {
+            "Ref": "GameEventsRecorderDlq6C442AEC",
+          },
+        ],
+      },
+      "Type": "AWS::SQS::QueuePolicy",
     },
     "GameEventsRecorderLogs53B01156": {
       "DeletionPolicy": "Delete",
@@ -3199,6 +3974,16 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": "sqs:SendMessage",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "GameEventsRecorderDlq6C442AEC",
+                  "Arn",
+                ],
+              },
+            },
             {
               "Action": [
                 "dynamodb:BatchWriteItem",
@@ -3254,6 +4039,14 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
                 "Ref": "AWS::Region",
               },
             ],
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 7,
+              "Status": "Enabled",
+            },
           ],
         },
         "PublicAccessBlockConfiguration": {
@@ -3976,12 +4769,14 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
                 "dynamodb:DescribeTable",
               ],
               "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "ScoreEscalationScoreTable4A572334",
-                  "Arn",
-                ],
-              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ScoreEscalationScoreTable4A572334",
+                    "Arn",
+                  ],
+                },
+              ],
             },
             {
               "Action": [
@@ -4130,6 +4925,39 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         "Statistic": "Average",
         "Threshold": 100,
         "TreatMissingData": "notBreaching",
+      },
+      "Type": "AWS::CloudWatch::Alarm",
+    },
+    "SlackNotifyCanaryHeartbeat165A301B": {
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "SlackNotifyIncidentTopicF69BEECE",
+          },
+        ],
+        "AlarmDescription": "GameDay: canary が 5 分間 1 回も実行されていない (監視の空白)。canary の状態を確認する。",
+        "AlarmName": "gameday-canary-heartbeat",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "CanaryName",
+            "Value": {
+              "Ref": "ObservabilityTopPageCanary2BEAB257",
+            },
+          },
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "SuccessPercent",
+        "Namespace": "CloudWatchSynthetics",
+        "OKActions": [
+          {
+            "Ref": "SlackNotifyIncidentTopicF69BEECE",
+          },
+        ],
+        "Period": 300,
+        "Statistic": "SampleCount",
+        "Threshold": 1,
+        "TreatMissingData": "breaching",
       },
       "Type": "AWS::CloudWatch::Alarm",
     },

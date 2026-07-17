@@ -8,6 +8,7 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 export interface GameEventsProps {
   /** 影響開始 (ALARM) / 復旧 (OK) の判定に使う canary ヘルスアラーム */
@@ -39,11 +40,22 @@ export class GameEvents extends Construct {
       throw new Error('GameEvents には最低 1 つの experimentTemplateId が要る');
     }
 
+    // 記録の取りこぼしの受け皿。EventBridge → Lambda は非同期呼び出しで、ハンドラが
+    // 失敗し続けると既定 2 回のリトライ後にイベントが黙って消える (= 採点素材の欠落)。
+    // DLQ に残せば「いつ何を取り逃したか」を後から確認し、手書きフォールバック
+    // (experimentStartedAt 等) で補える。
+    const dlq = new sqs.Queue(this, 'RecorderDlq', {
+      enforceSSL: true,
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
     const recorder = new nodejs.NodejsFunction(this, 'Recorder', {
       entry: path.join(__dirname, '..', '..', 'lambda', 'game-events', 'index.mjs'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_24_X,
       timeout: cdk.Duration.seconds(10),
+      deadLetterQueue: dlq,
       logGroup: new logs.LogGroup(this, 'RecorderLogs', {
         retention: logs.RetentionDays.ONE_WEEK,
         removalPolicy: cdk.RemovalPolicy.DESTROY,

@@ -3,14 +3,20 @@ import { Construct } from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as fis from 'aws-cdk-lib/aws-fis';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as sfnTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // FIS が CloudWatch Logs へログを配信するのに必要な権限 (vended log delivery)。
 // ログ配信系のアクションはリソース単位で絞れないため resources は '*'。
-const LOG_DELIVERY_ACTIONS = [
+// legacy スタック (scenario-03) の実験も同じ権限が要るのでエクスポートして共有する。
+export const LOG_DELIVERY_ACTIONS = [
   'logs:CreateLogDelivery',
   'logs:PutResourcePolicy',
   'logs:DescribeResourcePolicies',
@@ -29,6 +35,10 @@ export interface FaultInjectionProps {
   readonly service: ecs.IService;
   /** 対象サービスが属する ECS クラスター */
   readonly cluster: ecs.ICluster;
+  /** 対象サービスの定義上の desiredCount (backstop の復元値。TargetApp と一致させる) */
+  readonly serviceDesiredCount: number;
+  /** 実験レポートに載せる振り返りダッシュボード (gameday-review) の ARN。名前ではなく ARN */
+  readonly reviewDashboardArn: string;
   /**
    * 障害注入を start-experiment から何分遅らせるか (aws:fis:wait を先頭に挿入)。
    * 0 / 未指定なら即時。1〜720 分。start-experiment をデプロイ直後に叩けば
@@ -132,6 +142,43 @@ export class FaultInjection extends Construct {
       logSchemaVersion: 2,
     };
 
+    // 実験レポート (PDF) の配信先。実験前後のダッシュボードスナップショット付きレポートが
+    // S3 に出る (振り返りの一次資料)。3 実験で共有し、プレフィックスでシナリオを分ける。
+    const reportBucket = new s3.Bucket(this, 'ReportBucket', {
+      bucketName: `gameday-fis-reports-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED, // SSE-S3 なのでレポート配信に KMS 権限は不要
+      enforceSSL: true,
+    });
+    // dashboardIdentifier は名前でなく ARN (名前だと synth は通るが deploy 時 InvalidRequest)。
+    // postExperimentDuration は「復旧が窓に収まる長さ」をシナリオごとに指定する。
+    const reportConfiguration = (
+      prefix: string,
+      postExperimentDuration: string,
+    ): fis.CfnExperimentTemplate.ExperimentTemplateExperimentReportConfigurationProperty => ({
+      outputs: {
+        experimentReportS3Configuration: { bucketName: reportBucket.bucketName, prefix },
+      },
+      dataSources: {
+        cloudWatchDashboards: [{ dashboardIdentifier: props.reviewDashboardArn }],
+      },
+      preExperimentDuration: 'PT10M',
+      postExperimentDuration,
+    });
+    // レポート配信には s3:GetObject + s3:PutObject の両方が要る (grantWrite だけでは不足)。
+    // AWS 推奨に従いレポートのプレフィックスに限定し、ダッシュボード読み取り権限も付ける。
+    const grantReportDelivery = (role: iam.Role, prefix: string): void => {
+      reportBucket.grants.readWrite(role, `${prefix}*`);
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ['cloudwatch:GetMetricWidgetImage', 'cloudwatch:GetDashboard'],
+          resources: ['*'],
+        }),
+      );
+    };
+
     // ===== シナリオ1: ECS タスクを 1 つ停止 =====
     const ecsRole = new iam.Role(this, 'FisEcsRole', {
       assumedBy: new iam.ServicePrincipal('fis.amazonaws.com'),
@@ -146,13 +193,16 @@ export class FaultInjection extends Construct {
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
     ecsRole.addToPolicy(new iam.PolicyStatement({ actions: LOG_DELIVERY_ACTIONS, resources: ['*'] }));
+    grantReportDelivery(ecsRole, 'stop-task/');
 
     const stopTaskTemplate = new fis.CfnExperimentTemplate(this, 'StopOneTask', {
       description: 'GameDay: Fargate タスクを 1 つ停止し、冗長性と回復を観察する',
       roleArn: ecsRole.roleArn,
       stopConditions: [stopCondition],
       logConfiguration,
-      tags: { Name: 'gameday-stop-one-task' },
+      // 自己回復シナリオ (ECS が数十秒でタスクを補充)。回復は 10 分の後観測窓に収まる
+      experimentReportConfiguration: reportConfiguration('stop-task/', 'PT10M'),
+      tags: { Name: 'gameday-stop-one-task', gameday: 'true' },
       targets: {
         Tasks: {
           resourceType: 'aws:ecs:task',
@@ -181,13 +231,16 @@ export class FaultInjection extends Construct {
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
     rdsRole.addToPolicy(new iam.PolicyStatement({ actions: LOG_DELIVERY_ACTIONS, resources: ['*'] }));
+    grantReportDelivery(rdsRole, 'failover-db/');
 
     const failoverDbTemplate = new fis.CfnExperimentTemplate(this, 'FailoverDb', {
       description: 'GameDay: Aurora をフェイルオーバーし、書き込み先切替時の挙動を観察する',
       roleArn: rdsRole.roleArn,
       stopConditions: [stopCondition],
       logConfiguration,
-      tags: { Name: 'gameday-failover-db' },
+      // 自己回復シナリオ (フェイルオーバーは数十秒〜数分)。回復は 10 分の後観測窓に収まる
+      experimentReportConfiguration: reportConfiguration('failover-db/', 'PT10M'),
+      tags: { Name: 'gameday-failover-db', gameday: 'true' },
       targets: {
         Clusters: {
           resourceType: 'aws:rds:cluster',
@@ -271,13 +324,16 @@ export class FaultInjection extends Construct {
       new iam.PolicyStatement({ actions: ['cloudwatch:DescribeAlarms'], resources: ['*'] }),
     );
     ssmRole.addToPolicy(new iam.PolicyStatement({ actions: LOG_DELIVERY_ACTIONS, resources: ['*'] }));
+    grantReportDelivery(ssmRole, 'scale-to-zero/');
 
     const scaleToZeroTemplate = new fis.CfnExperimentTemplate(this, 'ScaleToZero', {
       description: 'GameDay: Fargate を desiredCount=0 に落とす。自己回復しないので参加者が戻すまで復旧しない',
       roleArn: ssmRole.roleArn,
       stopConditions: [stopCondition],
       logConfiguration,
-      tags: { Name: 'gameday-scale-to-zero' },
+      // 対応ラウンド: 復旧は人手 (MTTR 採点は 30 分で 0 点)。後観測窓も 30 分とり復旧まで写す
+      experimentReportConfiguration: reportConfiguration('scale-to-zero/', 'PT30M'),
+      tags: { Name: 'gameday-scale-to-zero', gameday: 'true' },
       // aws:ssm:start-automation-execution はターゲット不要だが L1 は targets 必須なので空で渡す
       // (対象は documentParameters の Cluster/Service で指定する)
       targets: {},
@@ -301,6 +357,72 @@ export class FaultInjection extends Construct {
           maxDuration: 'PT1M',
         },
       }),
+    });
+
+    // ===== scale-to-zero の backstop (実験の外で 30 分後に自動復元) =====
+    // 参加者が復旧できなかったときの保険。MTTR 採点が 30 分で 0 点になるのに合わせ、
+    // 実験終了から 30 分後に desiredCount がまだ 0 なら定義値へ戻す。
+    // 実験テンプレート内の aws:fis:wait + 復元アクションにしない理由 (fis-actions.md):
+    // ワンショット障害の後ろに wait を置くと、待機中に停止条件が発火した場合に実験ごと
+    // stopped になり復元もレポートも失われる。実験の外 (EventBridge → Step Functions) なら
+    // 実験のライフサイクルと無関係に必ず走る。
+    // SFN の AWS SDK 統合はネイティブ API が camelCase でも PascalCase で指定する (公式仕様)。
+    const describeService = new sfnTasks.CallAwsService(this, 'BackstopDescribe', {
+      service: 'ecs',
+      action: 'describeServices',
+      parameters: { Cluster: cluster.clusterName, Services: [service.serviceName] },
+      iamResources: [service.serviceArn],
+      resultPath: '$.describe',
+    });
+    const restoreService = new sfnTasks.CallAwsService(this, 'BackstopRestore', {
+      service: 'ecs',
+      action: 'updateService',
+      parameters: {
+        Cluster: cluster.clusterName,
+        Service: service.serviceName,
+        DesiredCount: props.serviceDesiredCount,
+      },
+      iamResources: [service.serviceArn],
+    });
+    const definition = new sfn.Wait(this, 'BackstopWait', {
+      time: sfn.WaitTime.duration(cdk.Duration.minutes(30)),
+    })
+      .next(describeService)
+      .next(
+        new sfn.Choice(this, 'BackstopNeeded')
+          // 参加者が既に復旧していれば何もしない (0 のときだけ定義値へ戻す)
+          .when(
+            sfn.Condition.numberEquals('$.describe.Services[0].DesiredCount', 0),
+            restoreService,
+          )
+          .otherwise(new sfn.Succeed(this, 'BackstopNotNeeded')),
+      );
+    const backstop = new sfn.StateMachine(this, 'ScaleToZeroBackstop', {
+      stateMachineName: 'gameday-scale-to-zero-backstop',
+      definitionBody: sfn.DefinitionBody.fromChainable(definition),
+      timeout: cdk.Duration.minutes(45),
+      tracingEnabled: true,
+      logs: {
+        destination: new logs.LogGroup(this, 'BackstopLogs', {
+          retention: logs.RetentionDays.ONE_WEEK,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        }),
+        level: sfn.LogLevel.ALL,
+      },
+    });
+    // completed だけでなく stopped/failed でも起動する (障害は残っているかもしれない)。
+    // reset での実験停止後にも走るが、その頃には revert 済みで desiredCount!=0 → no-op (冪等)。
+    new events.Rule(this, 'ScaleToZeroBackstopRule', {
+      description: 'GameDay: scale-to-zero 実験の終了 30 分後に desiredCount を自動復元する保険',
+      eventPattern: {
+        source: ['aws.fis'],
+        detailType: ['FIS Experiment State Change'],
+        detail: {
+          'experiment-template-id': [scaleToZeroTemplate.attrId],
+          'new-state': { status: ['completed', 'stopped', 'failed'] },
+        },
+      },
+      targets: [new targets.SfnStateMachine(backstop)],
     });
 
     this.stopTaskTemplateId = stopTaskTemplate.attrId;
