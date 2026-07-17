@@ -1,4 +1,5 @@
-import type { Inject, InjectStatus, ScoringConfig } from './types';
+import { Fragment } from 'react';
+import type { Inject, InjectStatus, RoundDef, ScoringConfig } from './types';
 import { fmtMinutes } from './types';
 import {
   DEFAULT_SCORING,
@@ -72,19 +73,118 @@ function ScoreCell({
   );
 }
 
+function InjectRow({
+  inject,
+  revealed,
+  onReveal,
+  onAck,
+  scoring,
+}: {
+  inject: Inject;
+  revealed: ReadonlySet<string>;
+  onReveal: (injectId: string, hintId: string) => void;
+  onAck?: (injectId: string) => void;
+  scoring: ScoringConfig;
+}) {
+  const detailRows = [
+    ['指示 (インジェクト)', inject.instruction],
+    ['チームの対応', inject.response],
+    ['採点メモ', inject.notes],
+  ].filter((r): r is [string, string] => Boolean(r[1]));
+  return (
+    <tr>
+      <td className="time">{inject.time ?? '—'}</td>
+      <td>
+        <div>
+          <span className="inject-title">{inject.title}</span>
+          {inject.scenarioId && <span className="inject-scenario">{inject.scenarioId}</span>}
+        </div>
+        {detailRows.length > 0 && (
+          <details className="inject-detail">
+            <summary>指示・対応の記録</summary>
+            <dl>
+              {detailRows.map(([dt, dd]) => (
+                <div key={dt}>
+                  <dt>{dt}</dt>
+                  <dd>{dd}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        )}
+        <Hints inject={inject} revealed={revealed} onReveal={onReveal} />
+      </td>
+      <td>
+        <StatusChip status={inject.status} />
+        {onAck && inject.impactStartAt && !inject.ackAt && (
+          <button type="button" className="ack-button small" onClick={() => onAck(inject.id)}>
+            検知宣言
+          </button>
+        )}
+      </td>
+      <td className="num"><Minutes value={inject.detectionMinutes} /></td>
+      <td className="num"><Minutes value={inject.recoveryMinutes} /></td>
+      <td className="score-cell">
+        <ScoreCell inject={inject} revealed={revealed} scoring={scoring} />
+      </td>
+    </tr>
+  );
+}
+
+/** ラウンドごとの小計 (実効スコア合計 / 満点合計)。採点済みだけを分子に、満点は全件を分母に */
+function roundSubtotal(
+  injects: Inject[],
+  revealed: ReadonlySet<string>,
+  scoring: ScoringConfig,
+): { got: number; max: number } {
+  return injects.reduce(
+    (acc, i) => ({
+      got: acc.got + (effectiveScore(i, revealed, scoring) ?? 0),
+      max: acc.max + (i.maxScore ?? 0),
+    }),
+    { got: 0, max: 0 },
+  );
+}
+
 export default function ScoreTable({
   injects,
   revealed,
   onReveal,
   onAck,
+  rounds,
   scoring = DEFAULT_SCORING,
 }: {
   injects: Inject[];
   revealed: ReadonlySet<string>;
   onReveal: (injectId: string, hintId: string) => void;
   onAck?: (injectId: string) => void;
+  rounds?: RoundDef[];
   scoring?: ScoringConfig;
 }) {
+  // ラウンドが 1 つも設定されていなければグループ見出しは出さず従来どおりフラット表示。
+  const hasRounds = injects.some((i) => typeof i.round === 'number');
+  // 出現順を保ったラウンドのキー列 (未分類は最後にまとめる)
+  const roundKeys: (number | null)[] = [];
+  for (const i of injects) {
+    const key = typeof i.round === 'number' ? i.round : null;
+    if (!roundKeys.includes(key)) roundKeys.push(key);
+  }
+  roundKeys.sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
+  const titleOf = (round: number | null) =>
+    round === null ? 'ラウンド未分類' : rounds?.find((r) => r.round === round)?.title ?? `ラウンド ${round}`;
+
+  const rowsFor = (list: Inject[]) =>
+    list.map((inject) => (
+      <InjectRow
+        key={inject.id}
+        inject={inject}
+        revealed={revealed}
+        onReveal={onReveal}
+        onAck={onAck}
+        scoring={scoring}
+      />
+    ));
+
   return (
     <div className="table-wrap">
       <table>
@@ -104,55 +204,21 @@ export default function ScoreTable({
               <td className="kpt-empty" colSpan={6}>該当するインジェクトがありません</td>
             </tr>
           )}
-          {injects.map((inject) => {
-            const detailRows = [
-              ['指示 (インジェクト)', inject.instruction],
-              ['チームの対応', inject.response],
-              ['採点メモ', inject.notes],
-            ].filter((r): r is [string, string] => Boolean(r[1]));
-            return (
-              <tr key={inject.id}>
-                <td className="time">{inject.time ?? '—'}</td>
-                <td>
-                  <div>
-                    <span className="inject-title">{inject.title}</span>
-                    {inject.scenarioId && <span className="inject-scenario">{inject.scenarioId}</span>}
-                  </div>
-                  {detailRows.length > 0 && (
-                    <details className="inject-detail">
-                      <summary>指示・対応の記録</summary>
-                      <dl>
-                        {detailRows.map(([dt, dd]) => (
-                          <div key={dt}>
-                            <dt>{dt}</dt>
-                            <dd>{dd}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </details>
-                  )}
-                  <Hints inject={inject} revealed={revealed} onReveal={onReveal} />
-                </td>
-                <td>
-                  <StatusChip status={inject.status} />
-                  {onAck && inject.impactStartAt && !inject.ackAt && (
-                    <button
-                      type="button"
-                      className="ack-button small"
-                      onClick={() => onAck(inject.id)}
-                    >
-                      検知宣言
-                    </button>
-                  )}
-                </td>
-                <td className="num"><Minutes value={inject.detectionMinutes} /></td>
-                <td className="num"><Minutes value={inject.recoveryMinutes} /></td>
-                <td className="score-cell">
-                  <ScoreCell inject={inject} revealed={revealed} scoring={scoring} />
-                </td>
-              </tr>
-            );
-          })}
+          {!hasRounds && rowsFor(injects)}
+          {hasRounds &&
+            roundKeys.map((key) => {
+              const list = injects.filter((i) => (typeof i.round === 'number' ? i.round : null) === key);
+              const sub = roundSubtotal(list, revealed, scoring);
+              return (
+                <Fragment key={`round-${key}`}>
+                  <tr className="round-header">
+                    <td colSpan={5}>{titleOf(key)}</td>
+                    <td className="score-col">{`小計 ${sub.got} / ${sub.max}`}</td>
+                  </tr>
+                  {rowsFor(list)}
+                </Fragment>
+              );
+            })}
         </tbody>
       </table>
     </div>

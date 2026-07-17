@@ -5,40 +5,86 @@
     "team": "Team Phoenix",
     "note": "サンプルデータ。GameDay 当日はこのファイルを編集すると画面に即時反映される (npm run dashboard)"
   },
+  "rounds": [
+    {
+      "round": 1,
+      "title": "観察ラウンド",
+      "description": "自己回復する障害。静観・判断の練習"
+    },
+    {
+      "round": 2,
+      "title": "対応ラウンド",
+      "description": "自己回復しない障害。人が直すまで復旧しない"
+    }
+  ],
   "systems": [
     {
       "id": "sys-main",
       "name": "本体 (3 層 Web)",
       "summary": "ALB + Fargate + Aurora の 3 層アプリ。トップページが DB に SELECT 1 して 200/503 を返す。",
-      "scenarioIds": ["scenario-01"],
+      "scenarioIds": [
+        "scenario-01"
+      ],
       "tiers": [
         {
           "name": "Web/LB 層",
           "icon": "public-subnet",
-          "nodes": [{ "service": "ALB", "icon": "alb", "label": "internet-facing / HTTP:80" }]
+          "nodes": [
+            {
+              "service": "ALB",
+              "icon": "alb",
+              "label": "internet-facing / HTTP:80"
+            }
+          ]
         },
         {
           "name": "アプリ層",
           "icon": "private-subnet",
-          "nodes": [{ "service": "ECS Fargate", "icon": "fargate", "count": 2, "label": "desiredCount=2" }]
+          "nodes": [
+            {
+              "service": "ECS Fargate",
+              "icon": "fargate",
+              "count": 2,
+              "label": "desiredCount=2"
+            }
+          ]
         },
         {
           "name": "データ層",
-          "nodes": [{ "service": "Aurora Serverless v2", "icon": "aurora", "label": "writer + reader" }],
+          "nodes": [
+            {
+              "service": "Aurora Serverless v2",
+              "icon": "aurora",
+              "label": "writer + reader"
+            }
+          ],
           "note": "隔離サブネット"
         }
       ],
-      "notes": ["canary gameday-top が 1 分間隔で外形監視"]
+      "notes": [
+        "canary gameday-top が 1 分間隔で外形監視"
+      ]
     },
     {
       "id": "sys-sub",
       "name": "サブ環境 (検証用)",
       "summary": "フィクスチャ用のサンプル。scenario-02 をこちらに紐づけ、フィルタとタブの連動をテストする。",
-      "scenarioIds": ["scenario-02"],
+      "scenarioIds": [
+        "scenario-02"
+      ],
       "tiers": [
         {
           "name": "データ層",
-          "nodes": [{ "service": "Aurora writer", "icon": "aurora" }, { "service": "Aurora reader", "icon": "unknown-icon-key" }]
+          "nodes": [
+            {
+              "service": "Aurora writer",
+              "icon": "aurora"
+            },
+            {
+              "service": "Aurora reader",
+              "icon": "unknown-icon-key"
+            }
+          ]
         }
       ]
     }
@@ -58,9 +104,20 @@
       "maxScore": 100,
       "notes": "影響なしの判断が速かった。静観の判断基準 (canary 成功率) をチームで言語化できた。",
       "hints": [
-        { "id": "h1-1", "label": "方針", "cost": 5, "text": "まず canary の成功率を見る。" },
-        { "id": "h1-2", "label": "具体手順", "cost": 20, "text": "ECS のサービスイベントを確認する。" }
-      ]
+        {
+          "id": "h1-1",
+          "label": "方針",
+          "cost": 5,
+          "text": "まず canary の成功率を見る。"
+        },
+        {
+          "id": "h1-2",
+          "label": "具体手順",
+          "cost": 20,
+          "text": "ECS のサービスイベントを確認する。"
+        }
+      ],
+      "round": 1
     },
     {
       "id": "inject-2",
@@ -74,7 +131,8 @@
       "recoveryMinutes": 14,
       "score": 60,
       "maxScore": 100,
-      "notes": "接続プールの再接続設定に課題。手動変更は振り返りで IaC への反映を判断する。"
+      "notes": "接続プールの再接続設定に課題。手動変更は振り返りで IaC への反映を判断する。",
+      "round": 2
     },
     {
       "id": "inject-3",
@@ -86,7 +144,8 @@
       "maxScore": 100,
       "experimentTemplateId": "EXTfixture001",
       "experimentId": "EXPfixture001",
-      "experimentStartedAt": "2026-07-15T04:00:00Z"
+      "experimentStartedAt": "2026-07-15T04:00:00Z",
+      "round": 1
     },
     {
       "id": "inject-4",
@@ -104,7 +163,8 @@
       "recoveredAt": "2026-07-15T05:15:00Z",
       "detectionMinutes": 2,
       "recoveryMinutes": 5,
-      "commsScore": 15
+      "commsScore": 15,
+      "round": 2
     }
   ],
   "feedback": [
@@ -146,11 +206,25 @@
     }
   ],
   "hintReveals": [
-    { "injectId": "inject-1", "hintId": "h1-2", "label": "具体手順", "cost": 20, "at": "2026-07-15T01:30:00Z" }
+    {
+      "injectId": "inject-1",
+      "hintId": "h1-2",
+      "label": "具体手順",
+      "cost": 20,
+      "at": "2026-07-15T01:30:00Z"
+    }
   ],
   "scoring": {
-    "detection": { "maxPoints": 40, "fullWithinMinutes": 2, "zeroAfterMinutes": 15 },
-    "recovery": { "maxPoints": 40, "fullWithinMinutes": 5, "zeroAfterMinutes": 30 },
+    "detection": {
+      "maxPoints": 40,
+      "fullWithinMinutes": 2,
+      "zeroAfterMinutes": 15
+    },
+    "recovery": {
+      "maxPoints": 40,
+      "fullWithinMinutes": 5,
+      "zeroAfterMinutes": 30
+    },
     "commsMaxPoints": 20
   },
   "events": [
@@ -194,8 +268,12 @@
         "injectId": "inject-1",
         "headline": "静観の判断が正解",
         "commentary": "タスク停止から約 30 秒で ECS が自己回復し、canary の成功率は落ちなかった。\n「壊れたのに直さない」判断を観測ベースで下せたのが最大の収穫。",
-        "wentWell": ["canary 成功率を最初に確認する動きが定着"],
-        "toImprove": ["静観の判断基準を宣言としてダッシュボードに残す"]
+        "wentWell": [
+          "canary 成功率を最初に確認する動きが定着"
+        ],
+        "toImprove": [
+          "静観の判断基準を宣言としてダッシュボードに残す"
+        ]
       }
     ]
   }

@@ -434,6 +434,16 @@ code {
 /* --- 自動採点の内訳 (スコアセルの小書き) --- */
 .score-breakdown { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 
+/* --- スコア表のラウンド見出し行 --- */
+.round-header td {
+  background: var(--page);
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-top: 2px solid var(--border);
+}
+.round-header td.score-col { text-align: right; font-weight: 600; color: var(--text-primary); }
+
 /* --- 振り返りレビュー (ReviewBoard) --- */
 .review-overall { white-space: pre-line; margin: 0 0 14px; }
 .review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }

@@ -28,6 +28,7 @@ export default function App() {
   const [stale, setStale] = useState(false); // ポーリング失敗 (前回表示を保持)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [scenarioId, setScenarioId] = useState('');
+  const [round, setRound] = useState(''); // ラウンドフィルタ ('' = すべて)
   // クライアント側の楽観的開示 (即時反映 + 静的ビルドのフォールバック)。
   // サーバに記録された data.hintReveals と union して最終的な開示集合にする。
   const [localReveals, setLocalReveals] = useState<Set<string>>(loadRevealed);
@@ -149,15 +150,21 @@ export default function App() {
   const injectsAll = data.injects.map((i) =>
     !i.ackAt && localAcks.has(i.id) ? { ...i, ackAt: localAcks.get(i.id) } : i,
   );
-  const injects = scenarioId
-    ? injectsAll.filter((i) => i.scenarioId === scenarioId)
-    : injectsAll;
+  // シナリオ AND ラウンドで絞り込む (scenarioId の仕組みと同型)
+  const injects = injectsAll.filter(
+    (i) =>
+      (!scenarioId || i.scenarioId === scenarioId) &&
+      (!round || String(i.round) === round),
+  );
   const feedback = scenarioId
     ? data.feedback.filter((f) => f.scenarioId === scenarioId || f.scenarioId == null)
     : data.feedback;
   const scenarioIds = [
     ...new Set(data.injects.map((i) => i.scenarioId).filter((v): v is string => Boolean(v))),
   ];
+  const roundValues = [
+    ...new Set(data.injects.map((i) => i.round).filter((v): v is number => typeof v === 'number')),
+  ].sort((a, b) => a - b);
 
   // 最終的な開示集合 = サーバ記録 (hintReveals) ∪ クライアント楽観更新
   const serverRevealedIds = (data.hintReveals ?? []).map((r) => r.hintId);
@@ -183,6 +190,19 @@ export default function App() {
 
       {/* フィルター行: この下の全セクション (タイル・表・チャート・KPT) をスコープする */}
       <div className="filter-row">
+        {roundValues.length > 0 && (
+          <label className="filter">
+            <span className="filter-label">ラウンド</span>
+            <select value={round} onChange={(e) => setRound(e.target.value)}>
+              <option value="">すべて</option>
+              {roundValues.map((r) => (
+                <option key={r} value={String(r)}>
+                  {data.rounds?.find((d) => d.round === r)?.title ?? `ラウンド ${r}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="filter">
           <span className="filter-label">シナリオ</span>
           <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
@@ -216,6 +236,7 @@ export default function App() {
           revealed={revealed}
           onReveal={reveal}
           onAck={ack}
+          rounds={data.rounds}
           scoring={data.scoring}
         />
       </section>

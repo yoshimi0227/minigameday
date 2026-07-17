@@ -29,6 +29,8 @@ export interface Hint {
 export interface Inject {
   id: string;
   scenarioId?: string | null;
+  /** ラウンド番号 (1=観察 / 2=対応)。表示のグルーピングと小計に使う。採点には影響しない */
+  round?: number;
   time?: string;
   title: string;
   instruction?: string;
@@ -151,9 +153,17 @@ export interface HintReveal {
   at: string; // ISO8601 タイムスタンプ (サーバ側で付与)
 }
 
+/** ラウンドの定義 (見出し・説明)。inject.round と number で結ぶ */
+export interface RoundDef {
+  round: number;
+  title: string; // 例: "観察ラウンド" / "対応ラウンド"
+  description?: string; // 例: "自己回復する障害。静観・判断の練習"
+}
+
 export interface GamedayData {
   event: GamedayEvent;
   systems?: TargetSystem[]; // お題システムの構成図 (シナリオ追加と連動して増やす)
+  rounds?: RoundDef[]; // ラウンドの見出し (無ければ round 番号だけで表示)
   injects: Inject[];
   feedback: Feedback[];
   hintReveals?: HintReveal[];
