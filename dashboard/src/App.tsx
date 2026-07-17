@@ -7,6 +7,7 @@ import TimeChart, { ChartLegend } from './TimeChart';
 import KptBoard from './KptBoard';
 import HintSummary from './HintSummary';
 import ReviewBoard from './ReviewBoard';
+import ReviewControl from './ReviewControl';
 import { effectiveScore } from './scoring';
 import type { GamedayData } from './types';
 
@@ -265,7 +266,9 @@ export default function App() {
         <KptBoard feedback={feedback} />
       </section>
 
-      {/* ゲーム終了後: gameday-retrospective スキルが review を書き込むと現れる */}
+      {/* ゲーム終了後: AI 講評。dev サーバの /api/review (Bedrock 経由) が review を生成して
+          書き込むと現れる。gameday-retrospective スキルによる手動書き込みでも表示は同じ */}
+      {import.meta.env.DEV && <ReviewControl hasReview={Boolean(data.review)} />}
       {data.review && <ReviewBoard review={data.review} injects={data.injects} />}
 
       <footer className="page-footer">

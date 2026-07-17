@@ -21,6 +21,7 @@
     "reset": "tsx scripts/reset-gameday.ts"
   },
   "devDependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1090.0",
     "@aws-sdk/client-cloudformation": "^3.1089.0",
     "@aws-sdk/client-dynamodb": "^3.1085.0",
     "@aws-sdk/client-fis": "^3.1085.0",

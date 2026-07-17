@@ -674,6 +674,24 @@ code {
 .review-list.went-well li::marker { color: var(--status-good); }
 .review-list.to-improve li::marker { color: var(--status-warning); }
 
+/* --- AI 講評の生成ボタン (dev サーバのみ) --- */
+.review-control { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.review-generate {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--surface-solid);
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 9px 20px;
+  white-space: nowrap;
+}
+.review-generate:hover { filter: brightness(1.08); }
+.review-generate:disabled { opacity: 0.6; cursor: progress; }
+.review-error { color: var(--status-critical); font-size: 13px; }
+
 /* --- 狭い画面 --- */
 @media (max-width: 560px) {
   .page { padding: 28px 18px 60px; }

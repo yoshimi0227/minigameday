@@ -101,6 +101,15 @@ export function effectiveScore(
 /** 手動の確定ステータス (自動導出はこれを上書きしない) */
 const MANUAL_FINAL: readonly InjectStatus[] = ['success', 'partial', 'failed'];
 
+/**
+ * アラーム帰属の staleness 窓 (分)。実験開始からこれ以上あとのアラーム遷移は帰属させない。
+ * 「最新の armed inject」方式は次のラウンドが armed になるまで口が開きっぱなしなので、
+ * ラウンド終了後の canary フレーク (一過性の失敗→復帰) が最後の inject の recoveredAt を
+ * 引き伸ばし MTTR を汚す。実プレイの復旧は MTTR 採点が 0 点になる 30 分 + 余裕で必ず
+ * この窓に収まる (窓の外 = 明らかにラウンド外のノイズ)。
+ */
+const ALARM_ATTRIBUTION_WINDOW_MINUTES = 120;
+
 type DerivedField =
   | 'experimentId'
   | 'experimentStartedAt'
@@ -173,6 +182,9 @@ export function deriveFromEvents(data: GamedayData): boolean {
     if (e.type !== 'alarm' || (e.state !== 'ALARM' && e.state !== 'OK')) continue;
     const owner = [...armed].reverse().find((i) => i.experimentStartedAt <= e.at);
     if (!owner) continue;
+    // staleness 窓の外は捨てる (帰属先を過去に遡らせもしない — より古い inject はもっと stale)
+    const sinceStartMin = (Date.parse(e.at) - Date.parse(owner.experimentStartedAt)) / 60000;
+    if (sinceStartMin > ALARM_ATTRIBUTION_WINDOW_MINUTES) continue;
     const seq = alarmSeq.get(owner.id) ?? [];
     seq.push(e);
     alarmSeq.set(owner.id, seq);

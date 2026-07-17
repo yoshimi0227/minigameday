@@ -169,6 +169,43 @@ test('deriveFromEvents: 多重実験 — アラームは「その時刻以前に
   expect(i2.status).toBe('recovered');
 });
 
+test('deriveFromEvents: staleness 窓 — 実験開始から 2 時間超のアラーム遷移は帰属させない (フレーク対策)', () => {
+  // ラウンド終了後 (次の inject が armed になる前) の canary フレークが、最後の inject の
+  // recoveredAt を引き伸ばして MTTR を汚さないこと
+  const inject: Inject = { id: 'i1', title: 't', experimentTemplateId: 'EXT1' };
+  const data = makeData(
+    [inject],
+    [
+      running('2026-07-15T02:00:00Z', 'EXP1', 'EXT1'),
+      alarm('2026-07-15T02:10:00Z', 'ALARM'),
+      alarm('2026-07-15T02:20:00Z', 'OK'),
+      alarm('2026-07-15T06:00:00Z', 'ALARM'), // 4 時間後のフレーク
+      alarm('2026-07-15T06:01:00Z', 'OK'),
+    ],
+  );
+  deriveFromEvents(data);
+  expect(inject.impactStartAt).toBe('2026-07-15T02:10:00Z');
+  expect(inject.recoveredAt).toBe('2026-07-15T02:20:00Z'); // フレークの OK に引き伸ばされない
+  expect(inject.recoveryMinutes).toBe(10);
+  expect(inject.status).toBe('recovered');
+});
+
+test('deriveFromEvents: 窓内 (2 時間以内) の再 ALARM は従来どおりフラッピングとして扱う', () => {
+  const inject: Inject = { id: 'i1', title: 't', experimentTemplateId: 'EXT1' };
+  const data = makeData(
+    [inject],
+    [
+      running('2026-07-15T02:00:00Z', 'EXP1', 'EXT1'),
+      alarm('2026-07-15T02:10:00Z', 'ALARM'),
+      alarm('2026-07-15T02:20:00Z', 'OK'),
+      alarm('2026-07-15T03:30:00Z', 'ALARM'), // 90 分後 = 窓内の再発
+    ],
+  );
+  deriveFromEvents(data);
+  expect(inject.status).toBe('impacted');
+  expect(inject.recoveredAt).toBeUndefined();
+});
+
 test('deriveFromEvents: 冪等 — 同じ events で 2 回呼ぶと 2 回目は変更なし (false)', () => {
   const inject: Inject = { id: 'i1', title: 't', experimentTemplateId: 'EXT1' };
   const data = makeData(

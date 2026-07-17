@@ -68,6 +68,17 @@ export interface ScoringCurve {
   zeroAfterMinutes: number;
 }
 
+/**
+ * エスカレーション (スコア到達で次の障害を自動発火) の運用スイッチ。
+ * enabled: false にすると dev サーバが SCORE アイテムに escalationEnabled=false を写し、
+ * score-escalator Lambda が判定ごとスキップする。scenario-03 (legacy) のラウンド中など
+ * 「累計スコアが閾値を超えても本体側の障害を出したくない」局面で運営が切る。
+ * セクションが無ければ有効 (後方互換)。npm run reset では持ち越さない (毎周回 有効に戻る)。
+ */
+export interface EscalationConfig {
+  enabled?: boolean;
+}
+
 /** 自動採点の設定 (gameday.json の scoring セクション。無ければ DEFAULT_SCORING) */
 export interface ScoringConfig {
   detection: ScoringCurve; // 検知: impactStartAt → ackAt (検知宣言) の速さ
@@ -168,6 +179,7 @@ export interface GamedayData {
   feedback: Feedback[];
   hintReveals?: HintReveal[];
   scoring?: ScoringConfig; // 自動採点のカーブ設定 (無ければ DEFAULT_SCORING)
+  escalation?: EscalationConfig; // エスカレーションの運用スイッチ (無ければ有効)
   events?: GameEvent[]; // ゲームイベントログ (gameEventsSync が追記。タイムライン素材)
   review?: Review; // ゲーム終了後の振り返りレビュー (あるときだけ表示)
 }

@@ -5,6 +5,7 @@ import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react-oxc';
 import { DynamoDBClient, PutItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { deriveFromEvents } from './src/scoring';
+import { generateReview } from './review-generator';
 import type { GameEvent, GamedayData, HintReveal } from './src/types';
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,11 @@ function ackApi(): Plugin {
  * POST /api/score {total} → DynamoDB の SCORE アイテムを更新する。これが DynamoDB Streams →
  * Lambda (score-escalator) を起動し、閾値到達で「次の障害」が自動発火する (AWS ネイティブ)。
  *
+ * エスカレーションの運用スイッチ: gameday.json の escalation.enabled を SCORE アイテムの
+ * escalationEnabled (BOOL) として写す。false のとき score-escalator は判定ごとスキップする
+ * (scenario-03 ラウンド中に本体側の障害を出さないための切替。無ければ有効)。
+ * クライアントの POST ボディではなく gameday.json を正とする (ブラウザから切れないように)。
+ *
  * 認証は既定のクレデンシャルチェーン (dashboard を AWS 認証済みシェルで起動している前提)。
  * ベストエフォート: テーブルが無い / 未認証 / スタック未デプロイでも画面は壊さない (200 で返す)。
  * dev のみ有効 (静的ビルドにこのエンドポイントは無い)。テーブル名は CDK 側の固定名と合わせる。
@@ -196,6 +202,7 @@ function scoreSyncApi(): Plugin {
   return {
     name: 'gameday-score-sync-api',
     configureServer(server: ViteDevServer) {
+      const dataPath = gamedayJsonPath(server);
       server.middlewares.use('/api/score', (req, res) => {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
         void readJsonBody(req)
@@ -204,16 +211,23 @@ function scoreSyncApi(): Plugin {
             if (!Number.isFinite(total)) {
               return sendJson(res, 400, { error: 'total (number) が必要' });
             }
-            return ddb
-              .send(
-                new PutItemCommand({
-                  TableName: tableName,
-                  Item: {
-                    pk: { S: 'SCORE' },
-                    total: { N: String(total) },
-                    updatedAt: { S: new Date().toISOString() },
-                  },
-                }),
+            // 読み取りも直列化キューを通す (手編集の tmp→rename と競合させない)
+            return updateGamedayJson(dataPath, (data) => ({
+              changed: false,
+              result: data.escalation?.enabled ?? true,
+            }))
+              .then((escalationEnabled) =>
+                ddb.send(
+                  new PutItemCommand({
+                    TableName: tableName,
+                    Item: {
+                      pk: { S: 'SCORE' },
+                      total: { N: String(total) },
+                      updatedAt: { S: new Date().toISOString() },
+                      escalationEnabled: { BOOL: escalationEnabled },
+                    },
+                  }),
+                ),
               )
               .then(() => sendJson(res, 200, { ok: true, synced: true, total }))
               .catch((e: unknown) => {
@@ -226,6 +240,45 @@ function scoreSyncApi(): Plugin {
               });
           })
           .catch(() => sendJson(res, 400, { error: 'invalid json' }));
+      });
+    },
+  };
+}
+
+/**
+ * AI 講評の生成エンドポイント。POST /api/review → gameday.json の実測データを材料に
+ * Bedrock (Mantle) 経由で Claude を呼び、review セクションを書き込む (→ ReviewBoard に表示)。
+ * 生成は数十秒〜数分かかるため直列化し、生成中の再実行は 409 で弾く。
+ * 認証は AWS_BEARER_TOKEN_BEDROCK (Bedrock API キー) か既定の AWS 認証チェーン。
+ */
+function reviewApi(): Plugin {
+  let generating = false;
+  return {
+    name: 'gameday-review-api',
+    configureServer(server: ViteDevServer) {
+      const dataPath = gamedayJsonPath(server);
+      server.middlewares.use('/api/review', (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
+        if (generating) return sendJson(res, 409, { error: '講評を生成中。完了を待ってから再実行する' });
+        generating = true;
+        // 材料の読み取りも updateGamedayJson (直列化キュー) を通す (changed: false = 読むだけ)。
+        // キュー外で readFileSync すると書き込みの tmp→rename と競合し Windows で EBUSY 等に
+        // なり得るうえ、同期例外だと .finally に届かず generating が立ちっぱなしになる。
+        void updateGamedayJson(dataPath, (data) => ({ changed: false, result: data }))
+          .then((data) => generateReview(data))
+          .then((review) =>
+            updateGamedayJson(dataPath, (d) => {
+              d.review = review;
+              return { changed: true, result: undefined };
+            }),
+          )
+          .then(() => sendJson(res, 200, { ok: true }))
+          .catch((e: unknown) =>
+            sendJson(res, 500, { error: e instanceof Error ? e.message : String(e) }),
+          )
+          .finally(() => {
+            generating = false;
+          });
       });
     },
   };
@@ -330,5 +383,5 @@ function gameEventsSync(): Plugin {
 // ディレクトリを root として実行されるため、ここに置く (ルートの vite.config.ts は
 // CDK プロジェクト全体の test / lint 設定を持つ)。
 export default defineConfig({
-  plugins: [react(), hintRevealApi(), ackApi(), scoreSyncApi(), gameEventsSync()],
+  plugins: [react(), hintRevealApi(), ackApi(), scoreSyncApi(), gameEventsSync(), reviewApi()],
 });
