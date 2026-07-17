@@ -103,15 +103,17 @@ test/           CDK ユニットテスト
 ## よく使うコマンド
 
 ```bash
-npm run build          # tsc (型チェック)
-npm run lint           # Oxlint + awscdk プラグイン (vp lint)
+npm run build          # tsc 型チェック (CDK 本体 + dashboard)
+npm run lint           # Oxlint + awscdk プラグイン (vp lint)。lint:fix で自動修正
 npm run synth:nag      # cdk-nag コンプライアンス検査 (AwsSolutionsChecks)
 npm test               # ユニットテスト (Vitest / vp test run)
 npm run dashboard      # GameDay ダッシュボード (Vite dev、gameday.json 編集で即時反映)
-npx cdk synth          # 合成
-npx cdk diff           # 差分
-npx cdk deploy         # デプロイ
-npx cdk drift          # ドリフト検出 (振り返り。ポーリング込み)
+npm run synth          # cdk synth (全スタック)
+npm run diff           # cdk diff
+npm run deploy         # cdk deploy --all (GameDay → GameDay-Legacy の順)。単体は npx cdk deploy GameDay 等
+npm run drift          # cdk drift (振り返り。ポーリング込み)
+npm run destroy        # cdk destroy --all (都度確認)
 aws fis start-experiment --experiment-template-id <id>      # 障害注入
 aws fis get-experiment --id <id>                            # 実験の状態・タイムライン
+aws fis stop-experiment --id <id>                           # 実験の緊急停止
 ```
