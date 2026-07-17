@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as synthetics from 'aws-cdk-lib/aws-synthetics';
 import * as rds from 'aws-cdk-lib/aws-rds';
 
@@ -29,6 +30,16 @@ export class Observability extends Construct {
     const { loadBalancer, targetGroup, databaseCluster } = props;
 
     // --- 外形監視: Synthetics (Playwright ランタイム) ---
+    // 成果物 (スクショ/ログ) 置き場は自前バケットにする。L2 任せの自動バケットは
+    // DeletionPolicy: Retain のため、都度 destroy 運用だと毎回残骸として溜まる。
+    const artifactsBucket = new s3.Bucket(this, 'CanaryArtifacts', {
+      bucketName: `gameday-canary-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+    });
     const canary = new synthetics.Canary(this, 'TopPageCanary', {
       canaryName: 'gameday-top',
       runtime: synthetics.Runtime.SYNTHETICS_NODEJS_PLAYWRIGHT_6_0,
@@ -41,6 +52,9 @@ export class Observability extends Construct {
         // canary スクリプトが叩く対象 URL
         URL: `http://${loadBalancer.loadBalancerDnsName}`,
       },
+      artifactsBucketLocation: { bucket: artifactsBucket },
+      // canary 削除時に基盤 Lambda も削除する (S3 は対象外なので上の自前バケットで対処)
+      provisionedResourceCleanup: true,
     });
     this.canary = canary;
 

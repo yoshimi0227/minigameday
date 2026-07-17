@@ -213,6 +213,15 @@ export class LegacyAppStack extends cdk.Stack {
     );
 
     // 進行表示と振り返りの一次資料になる外形監視 + ダッシュボード
+    // 成果物置き場は自前バケット (L2 自動バケットは Retain のため destroy ごとに残骸になる)
+    const canaryArtifactsBucket = new s3.Bucket(this, 'CanaryArtifacts', {
+      bucketName: `gameday-legacy-canary-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+    });
     const canary = new synthetics.Canary(this, 'LegacyCanary', {
       canaryName: 'gameday-legacy-top',
       runtime: synthetics.Runtime.SYNTHETICS_NODEJS_PLAYWRIGHT_6_0,
@@ -222,6 +231,9 @@ export class LegacyAppStack extends cdk.Stack {
       }),
       schedule: synthetics.Schedule.rate(cdk.Duration.minutes(1)),
       environmentVariables: { URL: `http://${loadBalancer.loadBalancerDnsName}` },
+      artifactsBucketLocation: { bucket: canaryArtifactsBucket },
+      // canary 削除時に基盤 Lambda も削除する (S3 は対象外なので上の自前バケットで対処)
+      provisionedResourceCleanup: true,
     });
     const dashboard = new cloudwatch.Dashboard(this, 'ReviewDashboard', {
       dashboardName: 'gameday-legacy-review',

@@ -295,6 +295,154 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
       },
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
     },
+    "CanaryArtifacts16B34762": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": {
+          "Fn::Join": [
+            "",
+            [
+              "gameday-legacy-canary-artifacts-",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              "-",
+              {
+                "Ref": "AWS::Region",
+              },
+            ],
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "CanaryArtifactsAutoDeleteObjectsCustomResource611250C0": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "CanaryArtifactsPolicy9C3AC9F1",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "CanaryArtifacts16B34762",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "CanaryArtifactsPolicy9C3AC9F1": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "CanaryArtifacts16B34762",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "CanaryArtifacts16B34762",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "CanaryArtifacts16B34762",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "CanaryArtifacts16B34762",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "CanaryArtifacts16B34762",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
     "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
       "DependsOn": [
         "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
@@ -984,7 +1132,7 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
             [
               "s3://",
               {
-                "Ref": "LegacyCanaryArtifactsBucketD279D40E",
+                "Ref": "CanaryArtifacts16B34762",
               },
             ],
           ],
@@ -1003,6 +1151,7 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
           ],
         },
         "Name": "gameday-legacy-top",
+        "ProvisionedResourceCleanup": "AUTOMATIC",
         "RunConfig": {
           "EnvironmentVariables": {
             "URL": {
@@ -1029,69 +1178,6 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
         "StartCanaryAfterCreation": true,
       },
       "Type": "AWS::Synthetics::Canary",
-    },
-    "LegacyCanaryArtifactsBucketD279D40E": {
-      "DeletionPolicy": "Retain",
-      "Properties": {
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-              },
-            },
-          ],
-        },
-      },
-      "Type": "AWS::S3::Bucket",
-      "UpdateReplacePolicy": "Retain",
-    },
-    "LegacyCanaryArtifactsBucketPolicy15E50868": {
-      "Properties": {
-        "Bucket": {
-          "Ref": "LegacyCanaryArtifactsBucketD279D40E",
-        },
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": "s3:*",
-              "Condition": {
-                "Bool": {
-                  "aws:SecureTransport": "false",
-                },
-              },
-              "Effect": "Deny",
-              "Principal": {
-                "AWS": "*",
-              },
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "LegacyCanaryArtifactsBucketD279D40E",
-                    "Arn",
-                  ],
-                },
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "LegacyCanaryArtifactsBucketD279D40E",
-                          "Arn",
-                        ],
-                      },
-                      "/*",
-                    ],
-                  ],
-                },
-              ],
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-      },
-      "Type": "AWS::S3::BucketPolicy",
     },
     "LegacyCanaryHealth5F7AA03D": {
       "Properties": {
@@ -1145,7 +1231,7 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
                   "Effect": "Allow",
                   "Resource": {
                     "Fn::GetAtt": [
-                      "LegacyCanaryArtifactsBucketD279D40E",
+                      "CanaryArtifacts16B34762",
                       "Arn",
                     ],
                   },
@@ -1159,7 +1245,7 @@ exports[`snapshot: scenario-03 出発点スタック (LegacyApp) > LegacyApp 1`]
                       [
                         {
                           "Fn::GetAtt": [
-                            "LegacyCanaryArtifactsBucketD279D40E",
+                            "CanaryArtifacts16B34762",
                             "Arn",
                           ],
                         },
@@ -2300,6 +2386,64 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
     },
   },
   "Resources": {
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "ObservabilityCanaryArtifactsA93642C2",
+              },
+              " S3 bucket.",
+            ],
+          ],
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
     "FaultInjectionExperimentLogs844D302F": {
       "DeletionPolicy": "Delete",
       "Properties": {
@@ -3085,6 +3229,154 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       },
       "Type": "AWS::IAM::Policy",
     },
+    "ObservabilityCanaryArtifactsA93642C2": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": {
+          "Fn::Join": [
+            "",
+            [
+              "gameday-canary-artifacts-",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              "-",
+              {
+                "Ref": "AWS::Region",
+              },
+            ],
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "ObservabilityCanaryArtifactsAutoDeleteObjectsCustomResourceB8850C86": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "ObservabilityCanaryArtifactsPolicy576B3731",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "ObservabilityCanaryArtifactsA93642C2",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "ObservabilityCanaryArtifactsPolicy576B3731": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "ObservabilityCanaryArtifactsA93642C2",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ObservabilityCanaryArtifactsA93642C2",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "ObservabilityCanaryArtifactsA93642C2",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ObservabilityCanaryArtifactsA93642C2",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "ObservabilityCanaryArtifactsA93642C2",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
     "ObservabilityHttp5xxStopAlarmFC175C42": {
       "Properties": {
         "AlarmDescription": "FIS 停止条件: 5xx が想定の爆発半径を超えたら実験を止める",
@@ -3412,7 +3704,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
             [
               "s3://",
               {
-                "Ref": "ObservabilityTopPageCanaryArtifactsBucket2D655183",
+                "Ref": "ObservabilityCanaryArtifactsA93642C2",
               },
             ],
           ],
@@ -3431,6 +3723,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
           ],
         },
         "Name": "gameday-top",
+        "ProvisionedResourceCleanup": "AUTOMATIC",
         "RunConfig": {
           "EnvironmentVariables": {
             "URL": {
@@ -3457,69 +3750,6 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         "StartCanaryAfterCreation": true,
       },
       "Type": "AWS::Synthetics::Canary",
-    },
-    "ObservabilityTopPageCanaryArtifactsBucket2D655183": {
-      "DeletionPolicy": "Retain",
-      "Properties": {
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-              },
-            },
-          ],
-        },
-      },
-      "Type": "AWS::S3::Bucket",
-      "UpdateReplacePolicy": "Retain",
-    },
-    "ObservabilityTopPageCanaryArtifactsBucketPolicy9B6485F1": {
-      "Properties": {
-        "Bucket": {
-          "Ref": "ObservabilityTopPageCanaryArtifactsBucket2D655183",
-        },
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": "s3:*",
-              "Condition": {
-                "Bool": {
-                  "aws:SecureTransport": "false",
-                },
-              },
-              "Effect": "Deny",
-              "Principal": {
-                "AWS": "*",
-              },
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "ObservabilityTopPageCanaryArtifactsBucket2D655183",
-                    "Arn",
-                  ],
-                },
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "ObservabilityTopPageCanaryArtifactsBucket2D655183",
-                          "Arn",
-                        ],
-                      },
-                      "/*",
-                    ],
-                  ],
-                },
-              ],
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-      },
-      "Type": "AWS::S3::BucketPolicy",
     },
     "ObservabilityTopPageCanaryServiceRoleAB43CE5C": {
       "Properties": {
@@ -3549,7 +3779,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
                   "Effect": "Allow",
                   "Resource": {
                     "Fn::GetAtt": [
-                      "ObservabilityTopPageCanaryArtifactsBucket2D655183",
+                      "ObservabilityCanaryArtifactsA93642C2",
                       "Arn",
                     ],
                   },
@@ -3563,7 +3793,7 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
                       [
                         {
                           "Fn::GetAtt": [
-                            "ObservabilityTopPageCanaryArtifactsBucket2D655183",
+                            "ObservabilityCanaryArtifactsA93642C2",
                             "Arn",
                           ],
                         },
