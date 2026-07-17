@@ -2,6 +2,8 @@
 
 `dashboard/public/data/gameday.json` の構造。1 ファイル = 1 回の GameDay。
 過去回をアーカイブする場合は `dashboard/public/data/archive/YYYY-MM-DD.json` にコピーしてから書き換える。
+なお **`npm run reset` (周回リセット) は自動で `dashboard/data-archive/gameday-<stamp>.json` に退避する** —
+手動アーカイブ (public/data/archive = 画面から参照しうる公開用) とは別系統なので混同しない。
 
 ## トップレベル
 
@@ -14,6 +16,7 @@
   "hintReveals": [ /* ヒント開示の記録 (dev サーバが追記) */ ],
   "rounds":   [ /* ラウンドの見出し (任意。R1 観察 / R2 対応) */ ],
   "scoring":  { /* 自動採点のカーブ設定 (任意。無ければ既定値) */ },
+  "escalation": { /* エスカレーションの運用スイッチ (任意。無ければ有効) */ },
   "events":   [ /* ゲームイベントログ (gameEventsSync が追記。手編集しない) */ ],
   "review":   { /* ゲーム終了後の振り返りレビュー (gameday-retrospective が生成) */ }
 }
@@ -183,6 +186,21 @@ scenarios の「段階ヒント (詰まったら 10 分刻みで開示)」をポ
   "commsMaxPoints": 20
 }
 ```
+
+## escalation (エスカレーションの運用スイッチ — 任意)
+
+スコア到達で「次の障害」を自動発火する仕組み (score-escalator) の一時停止スイッチ。
+`/api/score` が SCORE アイテムの `escalationEnabled` (BOOL) として DynamoDB に写し、
+false のあいだ Lambda は閾値判定ごとスキップする。セクションが無ければ**有効**。
+
+```jsonc
+"escalation": { "enabled": false }
+```
+
+使いどころ: scenario-03 (GameDay-Legacy) のラウンド中。累計スコアが閾値 (既定 100) を
+超えても、誰も見ていない本体スタック側の Aurora フェイルオーバーを発火させないために切る。
+`npm run reset` はこのセクションを持ち越さない (毎周回、有効に戻る)。再度有効化したあとの
+最初のスコア同期で改めて判定される (閾値超過中なら発火する) ことに注意。
 
 カーブは線形減衰: `fullWithinMinutes` 以内 = 満点、`zeroAfterMinutes` 以降 = 0、間は線形。
 

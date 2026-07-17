@@ -2,7 +2,7 @@
 id: scenario-05
 title: Fargate サービスの desiredCount=0 → 参加者が戻すまで復旧しない
 type: rebuild
-status: implemented
+status: executed
 fis_actions: [aws:ssm:start-automation-execution]
 prerequisites: [ssm-automation-doc, fis-ssm-role]
 estimated_duration: 40m   # 実験は数秒。検知 + 復旧ワーク (desiredCount を戻す) + 前後観測

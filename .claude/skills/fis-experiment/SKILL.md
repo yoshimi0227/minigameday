@@ -21,21 +21,23 @@ GameDay シナリオを AWS FIS 実験テンプレートとして `lib/construct
 ```ts
 import * as fis from 'aws-cdk-lib/aws-fis';
 
-// 停止条件: 外形監視の成功率が落ちたら実験を強制停止する
-const stopAlarm = new cloudwatch.Alarm(this, 'GamedayStopCondition', {
-  alarmName: 'gameday-stop-condition',
-  metric: new cloudwatch.Metric({
-    namespace: 'CloudWatchSynthetics',
-    metricName: 'SuccessPercent',
-    dimensionsMap: { CanaryName: canary.canaryName },
-    statistic: 'Average',
+// 停止条件: 顧客影響 (5xx) が想定の爆発半径を超えたら実験を強制停止する。
+// ★このプロジェクトの実装 (lib/constructs/observability.ts の gameday-5xx-stop-condition) と同じ形。
+//   canary SuccessPercent は振り返りの主指標で、停止条件には 5xx を使っている。
+const stopAlarm = new cloudwatch.Alarm(this, 'Http5xxStopAlarm', {
+  alarmName: 'gameday-5xx-stop-condition',
+  metric: new cloudwatch.MathExpression({
+    expression: 'elb + target',
+    usingMetrics: { elb: elb5xx, target: target5xx }, // ALB発/Target発 5xx (Sum, 1分)
     period: cdk.Duration.minutes(1),
   }),
-  comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-  threshold: 50,
-  evaluationPeriods: 3,
-  // canary が動いていない = 影響を観測できない状態では実験を続けない
-  treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+  comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+  threshold: 10,
+  evaluationPeriods: 1,
+  // treatMissingData はメトリクスの性質で選ぶ:
+  // - 5xx 系は「無い」が正常 → NOT_BREACHING (欠測で誤停止させない)
+  // - canary 成功率を停止条件にするなら逆に BREACHING (canary 停止 = 観測不能では実験を続けない)
+  treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
 });
 
 const role = new iam.Role(this, 'GamedayFisRole', {
@@ -93,7 +95,7 @@ new fis.CfnExperimentTemplate(this, 'StopTaskExperiment', {
 
 ## 安全装置チェックリスト (deploy 前に全項目 yes)
 
-- **停止条件**: canary ベースの CloudWatch アラームを `stopConditions` に設定した。`treatMissingData: BREACHING` にした(観測不能な実験は続行しない)。
+- **停止条件**: 顧客影響ベースの CloudWatch アラーム (このプロジェクトは ALB+Target 5xx 合算の `gameday-5xx-stop-condition`) を `stopConditions` に設定した。`treatMissingData` はメトリクスの性質で選んだ (5xx 系 = 欠測が正常なので `NOT_BREACHING` / canary 成功率系 = 観測不能で続行しないので `BREACHING`)。
 - **爆発半径**: `selectionMode` を `COUNT(n)` / `PERCENT(n)` で明示した。`ALL` にする場合はその理由がシナリオに書いてある。
 - **ターゲット限定**: 対象の性質で使い分けた — ephemeral な対象 (ECS タスク等) は `parameters` (cluster/service) + `resourceTags`(同じタグが他リソースに付いていないか確認)、deploy 時に ARN が確定する安定リソース (同一スタックの Aurora クラスタ等) は CDK 参照経由の `resourceArns` で名指し(こちらの方が正確)。
 - **IAM 最小権限**: 実験ロールは使用アクションに必要な権限のみ。`Resource: '*'` はタグ検索系 (`tag:GetResources`) に限る。

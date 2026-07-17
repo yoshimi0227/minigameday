@@ -27,6 +27,7 @@ fis_actions: [aws:ecs:stop-task]
 prerequisites: []        # 例: [ssm-sidecar] task-* 系アクションに必要な仕込み
 estimated_duration: 30m  # 観測時間込み。レポートの前後 10 分も見込む
 difficulty: beginner     # beginner / intermediate / advanced
+round: 1                 # 任意。1 = 観察ラウンド (自己回復する) / 2 = 対応ラウンド (人が直すまで復旧しない)
 ---
 
 ## 学びの狙い

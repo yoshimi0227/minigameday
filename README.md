@@ -12,7 +12,7 @@ ALB + Fargate の Web アプリに FIS で障害を注入し、CloudWatch Synthe
 | `GameDay` スタック | 下記 3 Construct を束ねる本体スタック |
 | └ `TargetApp` | お題の対象アプリ(3層)。ALB + Fargate(DB に ping する Node アプリ ×2)+ Aurora MySQL Serverless v2。`/healthz`=生存、`/`=DB 疎通(200/503) |
 | └ `Observability` | 振り返り。Synthetics canary(Playwright)、5xx 停止条件アラーム、ダッシュボード `gameday-review`(ALB/Target/Aurora 指標) |
-| └ `FaultInjection` | 障害注入。FIS 実験テンプレート2種(①Fargate タスク停止 / ②Aurora フェイルオーバー) |
+| └ `FaultInjection` | 障害注入。FIS 実験テンプレート3種(①Fargate タスク停止 / ②Aurora フェイルオーバー / ③scale-to-zero)+ 実験レポート用 S3 バケット |
 | └ `ScoreEscalation` | スコア置き場(DynamoDB)+ Streams 起動 Lambda。実効スコアが閾値到達で「次の障害」を自動発火 |
 | `GameDay-Legacy` スタック | scenario-03 用の SPOF 出発点(単一 EC2)。deploy ライフサイクルが異なるので独立。必要な回だけデプロイ |
 
@@ -78,6 +78,9 @@ aws fis get-experiment --id <experiment-id>   # 状態・タイムライン
 
 **R2 の復旧は人手が要る**:
 - **scale-to-zero** → 参加者が desiredCount を 2 に戻す(`aws ecs update-service --cluster <名> --service <名> --desired-count 2` またはコード整合なら `cdk deploy`)。放置しても ECS は戻さない。
+  ただし**運営側の保険 (backstop)** として、実験終了の 30 分後 (MTTR 採点が 0 点になる時点) に
+  desiredCount がまだ 0 なら EventBridge → Step Functions が定義値へ自動復元する
+  (参加者が既に戻していれば何もしない)。
 - **EC2 rebuild** (scenario-03) → 参加者が同じイメージを Fargate + ALB に組み直す(ハンドアウトの CfnOutput を使う)。詳細は `scenarios/03-ec2-to-ecs-rebuild.md` / `scenarios/05-scale-to-zero.md`。
 - **GameDay-Legacy は GameDay の後にデプロイする**(canary イベントを本体の `gameday-score` テーブルに名前参照で書くため。テーブルは GamedayStack が作る)。
 
@@ -133,6 +136,12 @@ bash scripts/collect-retrospective.sh <experiment-id> > retro-data.md
 講評はレポートに加えて **gameday.json の `review` セクション**にも書き込まれ、ダッシュボード末尾に
 「振り返りレビュー」(総評 + インジェクトごとの講評カード) として表示される。ゲーム中に自動記録された
 `events[]` (実験開始 / ALARM / OK / 検知宣言) のタイムラインとヒント消費が講評の一次資料になる。
+
+**AI 講評の自動生成 (dev 専用)**: ダッシュボードの「AI 講評を生成」ボタンでも `review` を生成できる。
+dev サーバの `POST /api/review` → `dashboard/review-generator.ts` が **Amazon Bedrock (Converse API)** で
+LLM を呼ぶ (既定モデル `apac.amazon.nova-lite-v1:0` / 東京リージョン。`GAMEDAY_REVIEW_MODEL` /
+`GAMEDAY_BEDROCK_REGION` で上書き — Converse で呼べるモデルなら差し替え可)。認証は
+`AWS_BEARER_TOKEN_BEDROCK` か既定の AWS 認証チェーン。
 
 ### フェーズ6: リセット(周回 / 撤収)
 
@@ -212,6 +221,12 @@ fis:StartExperiment  → 次の障害が自動発火 (1 回だけ)
 
 - **閾値の変更**: `-c escalateAtScore=150`(既定 100)。到達スコアで発火する。
 - **冪等性**: 各トリガーは `FIRED#<id>` アイテムの条件付き書き込みで「先勝ち」クレームし、1 回だけ発火。
+  `StartExperiment` が失敗したときはクレームを条件付き Delete で返却してから throw する
+  (リトライで再発火できる — 「実験は始まっていないのにトリガーだけ消費」を防ぐ)。
+- **一時停止スイッチ**: `gameday.json` に `"escalation": { "enabled": false }` を書くと、dev サーバが
+  SCORE アイテムに `escalationEnabled=false` を写し、Lambda は判定ごとスキップする。scenario-03
+  (GameDay-Legacy) のラウンド中に本体側の障害を出したくないときに切る。無ければ有効。
+  `npm run reset` では持ち越さない (毎周回、有効に戻る)。
 - **運用上の前提**: スコア同期 (dev サーバ → DynamoDB) は **AWS 認証済みシェルで `npm run dashboard`
   を起動している**こと(既定クレデンシャルチェーンを使う)。未認証・スタック未デプロイでも
   ダッシュボードの表示は壊れない(同期はベストエフォート)。テーブル名は既定 `gameday-score`

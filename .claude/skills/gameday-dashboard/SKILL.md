@@ -7,7 +7,7 @@ description: GameDay ダッシュボードサイト (dashboard/) の運用と変
 
 GameDay 当日の運営コンソール兼、終了後の共有サイト。インジェクト (運営からの指示) ごとのスコア表、検知・復旧時間のチャート、KPT 振り返りフィードバックを表示する。
 
-- 実体: `dashboard/` — React 19 + TypeScript (Vite+ / `@vitejs/plugin-react-oxc`)。コンポーネントは `src/` (App / Tiles / Architecture / AckBanner / ScoreTable / TimeChart / KptBoard / Hints / ReviewBoard)、型は `src/types.ts`、**採点・イベント導出ロジックは `src/scoring.ts` (唯一の置き場。UI と dev サーバの両方が import)**
+- 実体: `dashboard/` — React 19 + TypeScript (Vite+ / `@vitejs/plugin-react-oxc`)。コンポーネントは `src/` (App / Tiles / Architecture / AckBanner / ScoreTable / TimeChart / KptBoard / Hints / HintSummary / ReviewBoard / ReviewControl)、型は `src/types.ts`、**採点・イベント導出ロジックは `src/scoring.ts` (唯一の置き場。UI と dev サーバの両方が import)**。AI 講評生成は `dashboard/review-generator.ts` (dev サーバ専用。ブラウザには載せない)
 - データ: `dashboard/public/data/gameday.json` **このファイルの編集がこのスキルの最頻作業**
 - スキーマ: [references/data-schema.md](references/data-schema.md)
 
@@ -72,6 +72,9 @@ App は合計実効スコアを算出して dev サーバの `/api/score` に PO
   チェーンを使う)。未認証・スタック未デプロイでも同期はベストエフォートで、画面表示は壊れない。
 - 発火は各トリガー 1 回だけ (`FIRED#<id>` の条件付き書き込みで冪等)。仕組みの詳細は README「スコア到達で
   『次の障害』を自動発火」を参照。
+- **一時停止スイッチ**: `gameday.json` に `"escalation": { "enabled": false }` を書くと発火を止められる
+  (scenario-03 の GameDay-Legacy ラウンド中に本体側の障害を出さないため)。無ければ有効。
+  `npm run reset` では持ち越さない。スキーマは references/data-schema.md の escalation 節。
 
 ## 起動・ビルド
 
@@ -110,15 +113,18 @@ GameDay 中はプロジェクタに映したまま `npm run dashboard` を起動
 ## 振り返りとの連携
 
 - ゲーム終了後、`gameday-retrospective` スキルが講評を **gameday.json の `review` セクション**に書き込み、ダッシュボード末尾に「振り返りレビュー」として表示される (総評 + インジェクトごとの講評カード)。
+- **AI 講評の自動生成 (dev 専用)**: 画面の「AI 講評を生成」ボタン (ReviewControl。`import.meta.env.DEV` ガードで静的ビルドには出ない) → dev サーバの `POST /api/review` → `dashboard/review-generator.ts` が **Bedrock Converse API** で LLM を呼び、events タイムライン・採点・ヒント消費から `review` を生成して書き込む (updateGamedayJson 経由)。
+  - 認証: `AWS_BEARER_TOKEN_BEDROCK` (Bedrock API キー) か既定の AWS 認証チェーン。モデル既定 `apac.amazon.nova-lite-v1:0` / リージョン既定 `ap-northeast-1` (`GAMEDAY_REVIEW_MODEL` / `GAMEDAY_BEDROCK_REGION` で上書き)。**Nova 既定なのはこのアカウントが Claude 全世代を推論不可のため** (CLAUDE.md 検証済みメモ 2026-07-18。E2E 動作確認済み)。
+  - 生成は数十秒〜数分。生成中の再実行は 409。生成結果に `reportPath` は含まれないので、レポートを retrospectives/ に保存したら手で追記する。より厚い講評は gameday-retrospective スキル (Claude Code) でも生成できる (どちらも同じ `review` スキーマ)。
 - レポートの「学び」「アクションアイテム」から、共有したいものを `feedback[]` (KPT) に転記する運用は従来どおり。
 - 当日自動記録された `events[]` (実験開始 / ALARM / OK / 検知宣言) と `response` / `notes` / `hintReveals` が振り返りレポートのタイムラインの一次資料になる。
 
 ## 画面・デザインを変更するとき
 
 - **チャートや色を触る前に dataviz スキルを読み込む**こと。このダッシュボードは dataviz の参照パレット準拠で作られている。
-- 色は `dashboard/styles.css` の CSS 変数 (ロール名) のみを参照する。生の hex をコンポーネントに書かない。
+- 色は `dashboard/src/styles.css` の CSS 変数 (ロール名) のみを参照する。生の hex をコンポーネントに書かない。
 - 系列色を増やす場合は dataviz の `scripts/validate_palette.js` でライト・ダーク両面を検証してから採用する。
 - マーク仕様: バーは太さ ≤24px・データ端のみ 4px 丸め・隣接バーは 2px ギャップ、テキストは ink トークン (系列色の文字は禁止)、2 系列以上は凡例必須。
 - データは JSX のテキストとしてのみ描画する。`dangerouslySetInnerHTML` は禁止 (フィードバックや対応記録は自由入力の文字列のため)。
-- 描画ロジックを変えたら `npm test` を実行する。`dashboard/src/App.test.tsx` (Vitest + Testing Library + jsdom) が「データ → DOM」のスモークテスト (タイル数・行数・バー数・フィルタ動作) を守っている。スキーマにフィールドを足したらこのテストも更新する。
+- 描画ロジックを変えたら `npm test` を実行する。`dashboard/src/App.test.tsx` (Vitest + Testing Library + jsdom) が「データ → DOM」のスモークテスト (タイル数・行数・バー数・フィルタ動作) を守っている。採点ロジックは `dashboard/src/scoring.test.ts` が守る。スキーマにフィールドを足したらこれらのテストも更新する。
 - 型チェックは `npm run build` に含まれる (`tsc -p dashboard`)。CDK 側の tsconfig とは分離されている (dashboard は root tsconfig の exclude 対象)。

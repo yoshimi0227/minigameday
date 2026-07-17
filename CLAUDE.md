@@ -49,7 +49,7 @@ AI に FIS 実験を書かせるときの必須制約。詳細と実装例は `f
 - **生成物の置き場所**: シナリオ = `scenarios/NN-<slug>.md`(markdown)、実装コード = `lib/constructs/fault-injection.ts`。
 - **生成後の検証ループ**: `npm run build`(型)→ `npm test`(fine-grained/スナップショット)→ `npm run synth:nag`(cdk-nag)を通してからデプロイ。「AI に書かせて検証する」を必ず一巡させる。
 
-## ディレクトリ構成 (予定)
+## ディレクトリ構成
 
 ```
 bin/            CDK アプリのエントリポイント (GamedayStack + GameDay-Legacy)
@@ -57,8 +57,8 @@ lib/            スタック・コンストラクト定義
   gameday-stack.ts    本体スタック (3 本柱を 1 スタックに統合。cross-stack 参照ゼロ)
   constructs/
     target-app.ts       対象アプリ 3層 (ALB / Fargate / Aurora Serverless v2)
-    observability.ts    Synthetics canary / CloudWatch アラーム・ダッシュボード
-    fault-injection.ts  FIS 実験 3 種 (stop-task / failover / scale-to-zero)。faultDelayMinutes は "5-15" 範囲 = synth 時乱数に対応。scale-to-zero は SSM Automation (aws:ssm:start-automation-execution) で desiredCount=0 = 自己回復しない対応ラウンド用
+    observability.ts    Synthetics canary / CloudWatch アラーム・ダッシュボード (レビュー用ダッシュボード ARN を公開 → FIS 実験レポートの dataSources)
+    fault-injection.ts  FIS 実験 3 種 (stop-task / failover / scale-to-zero) + 実験レポート用 S3 バケット。faultDelayMinutes は "5-15" 範囲 = synth 時乱数に対応。scale-to-zero は SSM Automation (aws:ssm:start-automation-execution) で desiredCount=0 = 自己回復しない対応ラウンド用。実験終了 30 分後の backstop (EventBridge→Step Functions で desiredCount==0 なら定義値へ自動復元) 付き — 実験内 wait+復元にしない理由は fis-actions.md (停止条件発火で復元ごと失われる)
     slack-notify.ts     障害/復旧の Slack 通知 (canary ヘルスアラーム→SNS→AWS Chatbot)
     score-escalation.ts スコア閾値到達で「次の障害」を自動発火 (DynamoDB Streams→Lambda→FIS)
     game-events.ts      自動採点のイベント記録 (アラーム遷移 + FIS 状態遷移→EventBridge→Lambda→DynamoDB)。本体・legacy 両スタックで使う (legacy は gameday-score を名前インポート)
@@ -69,11 +69,14 @@ app/            対象アプリのソース (DB に ping する Node アプリ +
 scenarios/      AI が生成した GameDay シナリオ (markdown, frontmatter 付き)
 retrospectives/ 振り返りレポート (YYYY-MM-DD-<シナリオID>.md)
 dashboard/      スコア表・振り返りダッシュボード (React + TypeScript。データは public/data/gameday.json)
+  review-generator.ts  AI 講評生成 (dev サーバ専用。Bedrock Mantle 経由で Claude を呼ぶ)
+  data-archive/        npm run reset が旧 gameday.json を退避する先 (自動)
+scripts/        運用スクリプト (reset-gameday.ts = 周回リセット / collect-retrospective.sh = 振り返りデータ収集)
 canaries/       Synthetics Playwright スクリプト
 test/           CDK ユニットテスト
 .claude/
   agents/       gameday-scenario エージェント
-  skills/       fis-experiment / gameday-retrospective スキル
+  skills/       add-scenario / fis-experiment / gameday-dashboard / gameday-retrospective スキル
 ```
 
 ## 規約・進め方
@@ -98,6 +101,9 @@ test/           CDK ユニットテスト
 - **tags 付き `fis:StartExperiment` には `fis:TagResource` も要る (2026-07-17 実機で確認)**: 開始時タグは新規実験へのタグ付けとして別権限が要求され、無いと AccessDenied。ユニットテストでは捕まらない — 「AI に書かせて実機で一巡」の検証ループを省略しない。
 - **FIS でネイティブアクションが無い操作は `aws:ssm:start-automation-execution`**: FIS には ECS の desiredCount 変更や SG ルール削除のネイティブアクションが無い。SSM Automation ドキュメント (`aws:executeAwsApi` ステップ) を FIS から起動する。パラメータ = `documentArn` / `documentParameters` (JSON 文字列) / `maxDuration` (PT1M〜PT12H)。FIS ロール権限 = `ssm:StartAutomationExecution`/`GetAutomationExecution`/`StopAutomationExecution` + `iam:PassRole` (automation ロール)。`documentParameters` にトークン (ARN/名前) を入れるときは `JSON.stringify` ではなく `stack.toJsonString(...)` を使う (トークンを Fn::Join で解決)。scale-to-zero (scenario-05) がこのパターン。
 - **`cdk drift` と `cdk diff` は別物**: drift は実リソース vs スタックの期待状態(振り返りで使うのはこっち)、diff はローカルコード vs デプロイ済みテンプレート。
+- **AI 講評は Bedrock Converse API + Amazon Nova Lite (2026-07-18 実機で E2E 確認)**: `dashboard/review-generator.ts` は `@aws-sdk/client-bedrock-runtime` の `ConverseCommand` で呼ぶ (モデル非依存)。既定モデルは `apac.amazon.nova-lite-v1:0` (APAC クロスリージョン推論プロファイル)。環境変数 `GAMEDAY_REVIEW_MODEL` / `GAMEDAY_BEDROCK_REGION` / `AWS_BEARER_TOKEN_BEDROCK` で上書き可。Converse には Anthropic の json_schema 強制が無いため、スキーマをプロンプト埋め込み + コードフェンス剥がし + 受信側検証で担保している。
+  - **Claude (Anthropic モデル) を使わない理由**: このアカウントは新世代 (4.5+) が「not available for this account」403 (利用規約同意は受理済み・制御プレーン AVAILABLE でも推論プレーンで拒否 — ユースケースフォームが「None of the Above / 個人検証」のためと推測、再提出は見送り判断)、旧世代 (claude-3.x / sonnet-4) は「Legacy 30日未使用」ブロックで、**全世代が推論不可** (2026-07-18 確定)。解禁されたら `GAMEDAY_REVIEW_MODEL` に Claude の推論プロファイル ID を渡すだけで戻せる。
+  - ダッシュボードの「AI 講評を生成」ボタンは Nova で動作する。より厚い講評 (レポート + review) は従来どおり gameday-retrospective スキル (Claude Code) でも生成できる。
 - **AWS 構成図の生成 (ハンドアウト/登壇資料用) は `aws-architecture-diagram` スキル** (Claude Code プラグイン `deploy-on-aws@agent-plugins-for-aws`、user スコープ導入済み 2026-07-15)。AWS4 公式アイコンの draw.io XML を生成し、PostToolUse フックが自動検証、`drawio_url.py` で diagrams.net プレビュー URL を出せる。前提: `python3` + `defusedxml` (導入済み)。PNG/SVG 書き出しは draw.io desktop の CLI を使う。**旧 AWS Diagram MCP (`awslabs.aws-diagram-mcp-server`) は全バージョン yank 済みの非推奨のため使わない** (このスキルが公式後継)。ダッシュボードの構成図は aws-icons による React 描画 (`dashboard/src/Architecture.tsx`) で、プラグインには依存しない — 役割分担: 画面 = React 描画、配布物 = このスキル。
 
 ## よく使うコマンド

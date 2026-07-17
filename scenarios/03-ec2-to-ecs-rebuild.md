@@ -7,6 +7,7 @@ fis_actions: [aws:ec2:terminate-instances]
 prerequisites: [legacy-ec2-app-stack, rebuild-materials, participant-build-role]
 estimated_duration: 90m   # 実験自体は数分。検知 5 分 + 復旧ワーク 30〜60 分 + 前後観測・レポート窓込み
 difficulty: intermediate
+round: 2
 ---
 
 ## 学びの狙い
