@@ -27,6 +27,11 @@ const gameday = new GamedayStack(app, prefix);
 // 本体とは deploy ライフサイクルが異なるため独立。`cdk deploy GameDay-Legacy` で単体デプロイ。
 const legacyStack = new LegacyAppStack(app, `${prefix}-Legacy`);
 
+// アプリレベルの順序依存 (CFN Export は作らない)。legacy は gameday-score テーブルを
+// 「名前」で参照する (fromTableName) ため、deploy は GameDay が先・destroy --all は
+// Legacy が先でないと、legacy の recorder が実行時に書き込み先を失う。
+legacyStack.addDependency(gameday, 'GameEvents が gameday-score テーブルを名前参照するため');
+
 // GameDay のリソースを識別しやすくするタグ (爆発半径の確認用)
 cdk.Tags.of(app).add('Project', 'mini-gameday');
 
