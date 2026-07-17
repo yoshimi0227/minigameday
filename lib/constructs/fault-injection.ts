@@ -27,8 +27,40 @@ export interface FaultInjectionProps {
    * 障害注入を start-experiment から何分遅らせるか (aws:fis:wait を先頭に挿入)。
    * 0 / 未指定なら即時。1〜720 分。start-experiment をデプロイ直後に叩けば
    * 「デプロイ + N 分後に障害」になる。待機は障害の前なので停止条件は誤発火しない。
+   *
+   * `"5-15"` 形式の範囲を渡すと synth 時に実験テンプレートごとに独立な乱数で分数が
+   * 決まる (両端含む)。参加者は「いつ障害が来るか」を予測できず、エスカレーションで
+   * 発火する 2 発目も別の遅延になる。値はテンプレートに焼き込まれるため、変えるには
+   * 再デプロイ (synth) が必要。
    */
-  readonly faultDelayMinutes?: number;
+  readonly faultDelayMinutes?: number | string;
+  /** 乱数源 (テスト用の差し替え口)。既定は Math.random */
+  readonly random?: () => number;
+}
+
+/**
+ * faultDelayMinutes の指定値を分数に解決する。
+ * - 数値 / `"7"`: そのまま (0 = 遅延なし、それ以外は 1〜720 の整数)
+ * - `"5-15"`: 両端含む一様乱数で整数を 1 つ引く (呼ぶたびに変わる = 実験ごとに独立)
+ */
+export function resolveFaultDelayMinutes(
+  spec: number | string,
+  random: () => number = Math.random,
+): number {
+  const fail = (): never => {
+    throw new Error(`faultDelayMinutes は 1〜720 の整数か "5-15" 形式の範囲にする (指定値: ${spec})`);
+  };
+  const [low, high] = ((): [number, number] => {
+    if (typeof spec === 'number') return [spec, spec];
+    const parts = spec.split('-');
+    if (parts.length > 2 || parts.some((p) => !/^\d+$/.test(p))) return fail();
+    const nums = parts.map(Number);
+    return nums.length === 2 ? [nums[0], nums[1]] : [nums[0], nums[0]];
+  })();
+  if (!Number.isInteger(low) || !Number.isInteger(high)) fail();
+  if (low === 0 && high === 0) return 0; // 0 = 遅延なし (既定)
+  if (low < 1 || high > 720 || low > high) fail();
+  return low + Math.floor(random() * (high - low + 1));
 }
 
 /**
@@ -53,16 +85,16 @@ export class FaultInjection extends Construct {
     };
 
     // 障害開始の遅延 (aws:fis:wait を先頭に挿入)。1〜720 分。0/未指定なら即時。
-    const delayMin = props.faultDelayMinutes ?? 0;
-    if (delayMin !== 0 && (!Number.isInteger(delayMin) || delayMin < 1 || delayMin > 720)) {
-      throw new Error(`faultDelayMinutes は 1〜720 の整数にする (指定値: ${delayMin})`);
-    }
+    // 範囲指定 ("5-15") なら withDelay を呼ぶたび = 実験テンプレートごとに独立に乱数を引く。
+    const delaySpec = props.faultDelayMinutes ?? 0;
+    const random = props.random ?? Math.random;
     // 障害アクションの手前に待機を挟んだ actions を作る。待機は「障害の前」なので、
     // 待機中は何も壊れておらず 5xx 停止条件が誤発火しない (後ろに足すのとは別)。
     const withDelay = (
       faultName: string,
       faultAction: fis.CfnExperimentTemplate.ExperimentTemplateActionProperty,
     ): Record<string, fis.CfnExperimentTemplate.ExperimentTemplateActionProperty> => {
+      const delayMin = resolveFaultDelayMinutes(delaySpec, random);
       if (delayMin === 0) return { [faultName]: faultAction };
       return {
         Wait: {

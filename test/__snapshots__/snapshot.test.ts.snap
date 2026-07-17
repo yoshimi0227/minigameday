@@ -2313,6 +2313,245 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       "Type": "AWS::SecretsManager::Secret",
       "UpdateReplacePolicy": "Delete",
     },
+    "GameEventsAlarmStateRule257B89FF": {
+      "Properties": {
+        "Description": "GameDay: canary ヘルスアラームの ALARM/OK 遷移を記録する",
+        "EventPattern": {
+          "detail": {
+            "state": {
+              "value": [
+                "ALARM",
+                "OK",
+              ],
+            },
+          },
+          "detail-type": [
+            "CloudWatch Alarm State Change",
+          ],
+          "resources": [
+            {
+              "Fn::GetAtt": [
+                "SlackNotifyCanaryHealth3F9680B2",
+                "Arn",
+              ],
+            },
+          ],
+          "source": [
+            "aws.cloudwatch",
+          ],
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "GameEventsRecorder0CA78C96",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "GameEventsAlarmStateRuleAllowEventRuleGameDayGameEventsRecorder48088EB1B388B476": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "GameEventsRecorder0CA78C96",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "GameEventsAlarmStateRule257B89FF",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "GameEventsFisStateRule1ED046DE": {
+      "Properties": {
+        "Description": "GameDay: FIS 実験の状態遷移 (running/completed/stopped/failed) を記録する",
+        "EventPattern": {
+          "detail": {
+            "experiment-template-id": [
+              {
+                "Fn::GetAtt": [
+                  "FaultInjectionStopOneTaskB57D489D",
+                  "Id",
+                ],
+              },
+              {
+                "Fn::GetAtt": [
+                  "FaultInjectionFailoverDb06004B19",
+                  "Id",
+                ],
+              },
+            ],
+            "new-state": {
+              "status": [
+                "running",
+                "completed",
+                "stopped",
+                "failed",
+              ],
+            },
+          },
+          "detail-type": [
+            "FIS Experiment State Change",
+          ],
+          "source": [
+            "aws.fis",
+          ],
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "GameEventsRecorder0CA78C96",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "GameEventsFisStateRuleAllowEventRuleGameDayGameEventsRecorder48088EB1B286DC93": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "GameEventsRecorder0CA78C96",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "GameEventsFisStateRule1ED046DE",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "GameEventsRecorder0CA78C96": {
+      "DependsOn": [
+        "GameEventsRecorderServiceRoleDefaultPolicy98BBF6D7",
+        "GameEventsRecorderServiceRoleABB44B0F",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "ScoreEscalationScoreTable4A572334",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "GameEventsRecorderLogs53B01156",
+          },
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "GameEventsRecorderServiceRoleABB44B0F",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 10,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "GameEventsRecorderLogs53B01156": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 7,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "GameEventsRecorderServiceRoleABB44B0F": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "GameEventsRecorderServiceRoleDefaultPolicy98BBF6D7": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "dynamodb:BatchWriteItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem",
+                "dynamodb:DescribeTable",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ScoreEscalationScoreTable4A572334",
+                    "Arn",
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "GameEventsRecorderServiceRoleDefaultPolicy98BBF6D7",
+        "Roles": [
+          {
+            "Ref": "GameEventsRecorderServiceRoleABB44B0F",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
     "ObservabilityHttp5xxStopAlarmFC175C42": {
       "Properties": {
         "AlarmDescription": "FIS 停止条件: 5xx が想定の爆発半径を超えたら実験を止める",
@@ -2982,7 +3221,10 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
               },
             },
             {
-              "Action": "fis:StartExperiment",
+              "Action": [
+                "fis:StartExperiment",
+                "fis:TagResource",
+              ],
               "Effect": "Allow",
               "Resource": [
                 {

@@ -29,6 +29,12 @@ export interface SlackNotifyProps {
  * また起動直後に INSUFFICIENT_DATA → OK の遷移で「正常」通知が 1 度出る (= 監視稼働の合図)。
  */
 export class SlackNotify extends Construct {
+  /**
+   * canary ヘルスアラーム (gameday-canary-health)。ALARM = 障害の影響開始 / OK = 復旧
+   * のトグルとして GameEvents (自動採点のイベント記録) も参照する。
+   */
+  public readonly healthAlarm: cloudwatch.IAlarm;
+
   constructor(scope: Construct, id: string, props: SlackNotifyProps) {
     super(scope, id);
 
@@ -62,6 +68,7 @@ export class SlackNotify extends Construct {
     const snsAction = new cloudwatchActions.SnsAction(topic);
     healthAlarm.addAlarmAction(snsAction); // ALARM = 障害発生 → Slack
     healthAlarm.addOkAction(snsAction); // OK    = 復旧     → Slack
+    this.healthAlarm = healthAlarm;
 
     if (props.slackWorkspaceId && props.slackChannelId) {
       new chatbot.SlackChannelConfiguration(this, 'Slack', {

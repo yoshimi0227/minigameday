@@ -24,3 +24,4 @@ credentials
 
 # Claude Code local overrides
 .claude/settings.local.json
+cdk-outputs.json

@@ -70,7 +70,13 @@ export class ScoreEscalation extends Construct {
       }),
       // ランタイム同梱 SDK に client-fis がある保証がないため esbuild で明示的に同梱する
       // (externalModules: [] = 何も外部化せず全てバンドル)。esbuild は Vite+ 同梱を使う。
-      bundling: { format: nodejs.OutputFormat.ESM, externalModules: [], minify: false },
+      // 出力は CJS にする (実機で確認済みの罠 2 連):
+      //  1. ESM 出力 + CJS の SDK は require シムが無く "Dynamic require of 'node:https'
+      //     is not supported" で Init クラッシュする。
+      //  2. 定石の createRequire banner は Windows のローカルバンドルでシェルに
+      //     ダブルクォートを剥がされ SyntaxError になる。
+      // ソース (.mjs) は ESM のまま esbuild が CJS へ変換する (トップレベル await 不使用)。
+      bundling: { format: nodejs.OutputFormat.CJS, externalModules: [], minify: false },
       environment: {
         TABLE_NAME: table.tableName,
         TRIGGERS: JSON.stringify(
@@ -89,10 +95,12 @@ export class ScoreEscalation extends Construct {
 
     // FIS 実験を開始する権限。開始で作られる experiment は生成 ID なので experiment/* が要る。
     // 対象はこのアカウント/リージョンの実験テンプレート・実験に限定 (grant 相当の最小)。
+    // fis:TagResource も必須 — StartExperiment に tags を付けると新規実験へのタグ付けとして
+    // 別権限が要求され、無いと AccessDenied になる (実機で確認済み)。
     const stack = cdk.Stack.of(this);
     escalator.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['fis:StartExperiment'],
+        actions: ['fis:StartExperiment', 'fis:TagResource'],
         resources: [
           stack.formatArn({ service: 'fis', resource: 'experiment-template', resourceName: '*' }),
           stack.formatArn({ service: 'fis', resource: 'experiment', resourceName: '*' }),
