@@ -132,9 +132,9 @@ GameDay 中はプロジェクタに映したまま `npm run dashboard` を起動
 ## 振り返りとの連携
 
 - 講評は **KPT 形式で `feedback[]` に一本化** (2026-07-18。独立した `review` セクションと `retrospectives/` レポートは廃止)。AI 講評は `author: "AI 講評"` 付きで KPT ボードに人間のフィードバックと並ぶ。
-- **AI 講評の自動生成 (dev 専用)**: KPT カード内の「AI 講評を KPT で生成」ボタン (ReviewControl。`import.meta.env.DEV` ガードで静的ビルドには出ない) → dev サーバの `POST /api/review` → `dashboard/review-generator.ts` が **Bedrock Converse API** で LLM を呼び、events タイムライン・採点・ヒント消費から Keep/Problem/Try を生成して `feedback[]` に書き込む (updateGamedayJson 経由)。
+- **AI 講評の自動生成 (dev 専用)**: KPT カード内の「AI 講評を KPT で生成」ボタン (ReviewControl。`import.meta.env.DEV` ガードで静的ビルドには出ない) → dev サーバの `POST /api/review` → まず `dashboard/drift-detector.ts` が **`cdk drift` (CDK CLI)** を子プロセスで実行 (全スタック対象、240 秒で打ち切り、生出力をそのまま材料化) し、`dashboard/review-generator.ts` が **Bedrock Converse API** で LLM を呼び、events タイムライン・採点・ヒント消費・**drift (宣言されていない手動変更 = 想定外の手作業の検知)** から Keep/Problem/Try を生成して `feedback[]` に書き込む (updateGamedayJson 経由)。drift はベストエフォート (未デプロイ・未認証は UNAVAILABLE として LLM に渡り、講評自体は止まらない)。宣言済み手動対応の drift には `cdk deploy --revert-drift` での IaC 還元を try として出させる。
   - 認証: `AWS_BEARER_TOKEN_BEDROCK` (Bedrock API キー) か既定の AWS 認証チェーン。モデル既定 `apac.amazon.nova-lite-v1:0` / リージョン既定 `ap-northeast-1` (`GAMEDAY_REVIEW_MODEL` / `GAMEDAY_BEDROCK_REGION` で上書き)。**Nova 既定なのはこのアカウントが Claude 全世代を推論不可のため** (CLAUDE.md 検証済みメモ 2026-07-18)。
-  - 生成は数十秒〜数分。生成中の再実行は 409。**再生成は author='AI 講評' のエントリだけを入れ替える** (人間の KPT は残る)。より厚い講評 (drift / git diff / canary スクショまで踏み込む) は gameday-retrospective スキル (Claude Code) で — 出力先は同じ `feedback[]`。
+  - 生成は数分 (`cdk drift` 1〜3 分 + LLM)。生成中の再実行は 409。**再生成は author='AI 講評' のエントリだけを入れ替える** (人間の KPT は残る)。より厚い講評 (git diff / canary スクショまで踏み込む) は gameday-retrospective スキル (Claude Code) で — 出力先は同じ `feedback[]`。
 - 当日自動記録された `events[]` (実験開始 / ALARM / OK / 検知宣言) と `response` / `notes` / `hintReveals` が講評のタイムラインの一次資料になる。
 
 ## 画面・デザインを変更するとき

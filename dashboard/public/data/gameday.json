@@ -93,10 +93,37 @@
         }
       ],
       "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
-      "status": "pending"
+      "status": "recovered",
+      "experimentId": "EXPk51iALGKJvjNpmg",
+      "experimentStartedAt": "2026-07-18T05:35:40Z",
+      "impactStartAt": "2026-07-18T05:37:49Z",
+      "ackAt": "2026-07-18T05:38:12.839Z",
+      "detectionMinutes": 0.4,
+      "response": "14:38 検知宣言 (ダッシュボード)。14:41 運営 (Claude リハーサル) が aws ecs update-service --desired-count 2 を手動実行して復旧 (コンソール操作相当。desiredCount はコード定義値と同値のため drift は残らない)",
+      "recoveredAt": "2026-07-18T05:43:49Z",
+      "recoveryMinutes": 6
     }
   ],
-  "feedback": [],
+  "feedback": [
+    {
+      "type": "keep",
+      "comment": "検知宣言は影響開始から 2 分 23 秒後の 05:38:12.839 に行われた。検知 40 点満点中 40 点を獲得した。",
+      "scenarioId": "scenario-05",
+      "author": "AI 講評"
+    },
+    {
+      "type": "problem",
+      "comment": "復旧までの時間は影響開始から 6 分 49 秒で、復旧 40 点満点中 38 点だった。復旧時間はやや長めだった。",
+      "scenarioId": "scenario-05",
+      "author": "AI 講評"
+    },
+    {
+      "type": "try",
+      "comment": "復旧時間の短縮を図るために、復旧手順の具体的なヒント (hr2-2) を 5 分以内に購入するように努力する。",
+      "scenarioId": "scenario-05",
+      "author": "AI 講評"
+    }
+  ],
   "hintReveals": [],
   "scoring": {
     "detection": {
@@ -111,5 +138,44 @@
     },
     "commsMaxPoints": 20
   },
-  "events": []
+  "events": [
+    {
+      "key": "EVENT#2026-07-18T05:35:40Z#dd8cd0b8-a6b3-8e12-bd95-838aabc73b3b",
+      "type": "experiment",
+      "at": "2026-07-18T05:35:40Z",
+      "experimentId": "EXPk51iALGKJvjNpmg",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-18T05:36:33Z#12e48327-1d93-07ea-050d-babd1bc2f495",
+      "type": "experiment",
+      "at": "2026-07-18T05:36:33Z",
+      "experimentId": "EXPk51iALGKJvjNpmg",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "completed"
+    },
+    {
+      "key": "EVENT#2026-07-18T05:37:49Z#e0ecec08-d4df-df34-ed93-86218f289c30",
+      "type": "alarm",
+      "at": "2026-07-18T05:37:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "ALARM",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [0.0 (18/07/26 05:36:00)] was less than the threshold (100.0) (minimum 1 datapoint for OK -> ALARM transition)."
+    },
+    {
+      "key": "ACK#r2-scale",
+      "type": "ack",
+      "at": "2026-07-18T05:38:12.839Z",
+      "injectId": "r2-scale"
+    },
+    {
+      "key": "EVENT#2026-07-18T05:43:49Z#e0ab999f-bf6a-a655-9fcb-83c022ac8f2b",
+      "type": "alarm",
+      "at": "2026-07-18T05:43:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "OK",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (18/07/26 05:42:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
+    }
+  ]
 }

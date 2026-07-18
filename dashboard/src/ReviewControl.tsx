@@ -27,7 +27,7 @@ export default function ReviewControl({ hasAiFeedback }: { hasAiFeedback: boolea
       {error && <span className="review-error">{`生成に失敗: ${error}`}</span>}
       <button type="button" className="review-generate" onClick={generate} disabled={busy}>
         {busy
-          ? 'AI 講評を生成中… (1〜2 分)'
+          ? 'AI 講評を生成中… (drift 検出込みで数分)'
           : hasAiFeedback
             ? 'AI 講評 (KPT) を再生成'
             : 'AI 講評を KPT で生成'}

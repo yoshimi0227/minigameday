@@ -8,6 +8,7 @@ import { DynamoDBClient, PutItemCommand, ScanCommand } from '@aws-sdk/client-dyn
 import { FisClient, StartExperimentCommand } from '@aws-sdk/client-fis';
 import { deriveFromEvents, findStartCandidate } from './src/scoring';
 import { generateReview } from './review-generator';
+import { collectDriftMaterial } from './drift-detector';
 import { AI_FEEDBACK_AUTHOR, type GameEvent, type GamedayData, type HintReveal } from './src/types';
 
 // ---------------------------------------------------------------------------
@@ -248,12 +249,15 @@ function scoreSyncApi(): Plugin {
 }
 
 /**
- * AI 講評の生成エンドポイント。POST /api/review → gameday.json の実測データを材料に
- * Bedrock (Converse API) で LLM を呼び、KPT 形式の講評を feedback[] に書き込む
- * (author='AI 講評'。KPT ボードに人間のフィードバックと並んで出る)。
+ * AI 講評の生成エンドポイント。POST /api/review → まず `cdk drift` を子プロセスで実行
+ * (collectDriftMaterial。宣言されていない手動変更 = 想定外の手作業の検知材料。240 秒で
+ * 打ち切り) し、gameday.json の実測データと合わせて Bedrock (Converse API) で
+ * LLM を呼び、KPT 形式の講評を feedback[] に書き込む (author='AI 講評'。KPT ボードに
+ * 人間のフィードバックと並んで出る)。drift はベストエフォート (未デプロイ・未認証は
+ * UNAVAILABLE として材料に含め、講評自体は止めない)。
  * 再生成は AI 講評エントリだけを入れ替える (人間の KPT は触らない)。
- * 生成は数十秒〜数分かかるため直列化し、生成中の再実行は 409 で弾く。
- * 認証は AWS_BEARER_TOKEN_BEDROCK (Bedrock API キー) か既定の AWS 認証チェーン。
+ * 生成は数分かかる (drift 1〜3 分 + LLM) ため直列化し、生成中の再実行は 409 で弾く。
+ * 認証: Bedrock は AWS_BEARER_TOKEN_BEDROCK か既定チェーン。cdk drift は起動シェルの認証。
  */
 function reviewApi(): Plugin {
   let generating = false;
@@ -261,6 +265,8 @@ function reviewApi(): Plugin {
     name: 'gameday-review-api',
     configureServer(server: ViteDevServer) {
       const dataPath = gamedayJsonPath(server);
+      // cdk drift はプロジェクトルートで実行する (dev サーバの root は dashboard/)
+      const projectRoot = join(server.config.root, '..');
       server.middlewares.use('/api/review', (req, res) => {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
         if (generating) return sendJson(res, 409, { error: '講評を生成中。完了を待ってから再実行する' });
@@ -269,7 +275,7 @@ function reviewApi(): Plugin {
         // キュー外で readFileSync すると書き込みの tmp→rename と競合し Windows で EBUSY 等に
         // なり得るうえ、同期例外だと .finally に届かず generating が立ちっぱなしになる。
         void updateGamedayJson(dataPath, (data) => ({ changed: false, result: data }))
-          .then((data) => generateReview(data))
+          .then(async (data) => generateReview(data, await collectDriftMaterial(projectRoot)))
           .then((items) =>
             updateGamedayJson(dataPath, (d) => {
               const human = (d.feedback ?? []).filter((f) => f.author !== AI_FEEDBACK_AUTHOR);
