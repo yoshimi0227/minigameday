@@ -23,8 +23,9 @@ npm install
 npx cdk bootstrap        # 初回のみ (アカウント/リージョンごと)
 ```
 
-> アプリ層は `app/` を Docker ビルドする(`ContainerImage.fromAsset`)。
-> **`cdk deploy` 時は Docker デーモンの起動が必要**(`cdk synth` は不要)。
+> アプリ層は `app/` を Docker ビルドする。ビルド自体は **`@cdklabs/deploy-time-build`** の
+> `ContainerImageBuild` で deploy 時に CodeBuild 上で行うため、**ローカルに Docker は不要**
+> (synth するマシンの CPU アーキテクチャにも依存しない)。
 
 ## GameDay の流れ(6 フェーズ)
 

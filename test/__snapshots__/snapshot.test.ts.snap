@@ -2484,6 +2484,276 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
     },
   },
   "Resources": {
+    "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2": {
+      "Properties": {
+        "Artifacts": {
+          "Type": "NO_ARTIFACTS",
+        },
+        "Cache": {
+          "Type": "NO_CACHE",
+        },
+        "EncryptionKey": "alias/aws/s3",
+        "Environment": {
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "ImagePullCredentialsType": "CODEBUILD",
+          "PrivilegedMode": true,
+          "Type": "LINUX_CONTAINER",
+        },
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleD95F32B9",
+            "Arn",
+          ],
+        },
+        "Source": {
+          "BuildSpec": "{
+  "version": "0.2",
+  "phases": {
+    "build": {
+      "commands": [
+        "current_dir=$(pwd)",
+        "echo \\"$input\\"",
+        "mkdir workdir",
+        "cd workdir",
+        "aws s3 cp \\"$sourceS3Url\\" temp.zip",
+        "unzip temp.zip",
+        "ls -la",
+        "aws ecr get-login-password --region $repositoryRegion | docker login --username AWS --password-stdin $repositoryAuthUri",
+        "aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws",
+        "docker buildx ls",
+        "echo \\"$buildCommand\\"",
+        "eval \\"$buildCommand\\"",
+        "docker images",
+        "docker tag artifact:$imageTag $repositoryUri:$imageTag",
+        "docker push $repositoryUri:$imageTag"
+      ]
+    },
+    "post_build": {
+      "commands": [
+        "echo Build completed on \`date\`",
+        "\\nSTATUS='SUCCESS'\\nif [ $CODEBUILD_BUILD_SUCCEEDING -ne 1 ] # Test if the build is failing\\nthen\\nSTATUS='FAILED'\\nREASON=\\"ContainerImageBuild failed. See CloudWatch Log stream for the detailed reason: \\nhttps://$AWS_REGION.console.aws.amazon.com/cloudwatch/home?region=$AWS_REGION#logsV2:log-groups/log-group/\\\\$252Faws\\\\$252Fcodebuild\\\\$252F$projectName/log-events/$CODEBUILD_LOG_PATH\\"\\nfi\\ncat <<EOF > payload.json\\n{\\n  \\"StackId\\": \\"$stackId\\",\\n  \\"RequestId\\": \\"$requestId\\",\\n  \\"LogicalResourceId\\":\\"$logicalResourceId\\",\\n  \\"PhysicalResourceId\\": \\"$imageTag\\",\\n  \\"Status\\": \\"$STATUS\\",\\n  \\"Reason\\": \\"$REASON\\",\\n  \\"Data\\": {\\n    \\"ImageTag\\": \\"$imageTag\\"\\n  }\\n}\\nEOF\\ncurl -i -X PUT -H 'Content-Type:' -d \\"@payload.json\\" \\"$responseURL\\"\\n              "
+      ]
+    }
+  }
+}",
+          "Type": "NO_SOURCE",
+        },
+      },
+      "Type": "AWS::CodeBuild::Project",
+    },
+    "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleD95F32B9": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleDefaultPolicyBD233B55": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":logs:",
+                      {
+                        "Ref": "AWS::Region",
+                      },
+                      ":",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":log-group:/aws/codebuild/",
+                      {
+                        "Ref": "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2",
+                      },
+                    ],
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":logs:",
+                      {
+                        "Ref": "AWS::Region",
+                      },
+                      ":",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":log-group:/aws/codebuild/",
+                      {
+                        "Ref": "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2",
+                      },
+                      ":*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "codebuild:CreateReportGroup",
+                "codebuild:CreateReport",
+                "codebuild:UpdateReport",
+                "codebuild:BatchPutTestCases",
+                "codebuild:BatchPutCodeCoverages",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":codebuild:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":report-group/",
+                    {
+                      "Ref": "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2",
+                    },
+                    "-*",
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:CompleteLayerUpload",
+                "ecr:UploadLayerPart",
+                "ecr:InitiateLayerUpload",
+                "ecr:PutImage",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TargetAppAppImageRepository14F3CF93",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": "ecr:GetAuthorizationToken",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            {
+              "Action": "ecr:DescribeImages",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TargetAppAppImageRepository14F3CF93",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":s3:::",
+                      {
+                        "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+                      },
+                    ],
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":s3:::",
+                      {
+                        "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleDefaultPolicyBD233B55",
+        "Roles": [
+          {
+            "Ref": "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleD95F32B9",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
     "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
       "DependsOn": [
         "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
@@ -2541,6 +2811,87 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
         ],
       },
       "Type": "AWS::IAM::Role",
+    },
+    "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f306AEFF37": {
+      "DependsOn": [
+        "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleDefaultPolicyFECC51DC",
+        "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleB008BAA4",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "[ASSET_HASH].zip",
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleB008BAA4",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 300,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleB008BAA4": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleDefaultPolicyFECC51DC": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "codebuild:StartBuild",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleDefaultPolicyFECC51DC",
+        "Roles": [
+          {
+            "Ref": "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f3ServiceRoleB008BAA4",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
     },
     "FaultInjectionBackstopLogsA0AE7F87": {
       "DeletionPolicy": "Delete",
@@ -5084,6 +5435,91 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
       },
       "Type": "AWS::EC2::SecurityGroupEgress",
     },
+    "TargetAppAppImage903B932A": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2",
+        "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleDefaultPolicyBD233B55",
+        "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd64RoleD95F32B9",
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "DeployTimeBuildCustomResourceHandlerdb740fd554364a848a09e6dfcd01f4f306AEFF37",
+            "Arn",
+          ],
+        },
+        "buildCommand": "docker buildx build --platform linux/amd64 --output type=docker,name=artifact:$imageTag --provenance=false .",
+        "codeBuildProjectName": {
+          "Ref": "ContainerImageBuildAmd64e83729feb1564e709bec452b15847a30amd6491AAA9B2",
+        },
+        "repositoryUri": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Fn::Select": [
+                  4,
+                  {
+                    "Fn::Split": [
+                      ":",
+                      {
+                        "Fn::GetAtt": [
+                          "TargetAppAppImageRepository14F3CF93",
+                          "Arn",
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              ".dkr.ecr.",
+              {
+                "Fn::Select": [
+                  3,
+                  {
+                    "Fn::Split": [
+                      ":",
+                      {
+                        "Fn::GetAtt": [
+                          "TargetAppAppImageRepository14F3CF93",
+                          "Arn",
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              ".",
+              {
+                "Ref": "AWS::URLSuffix",
+              },
+              "/",
+              {
+                "Ref": "TargetAppAppImageRepository14F3CF93",
+              },
+            ],
+          ],
+        },
+        "sourceS3Url": {
+          "Fn::Sub": "s3://cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}/[ASSET_HASH].zip",
+        },
+        "type": "ContainerImageBuild",
+      },
+      "Type": "Custom::CDKContainerImageBuild",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "TargetAppAppImageRepository14F3CF93": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "EmptyOnDelete": true,
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true,
+        },
+      },
+      "Type": "AWS::ECR::Repository",
+      "UpdateReplacePolicy": "Delete",
+    },
     "TargetAppClusterFBBD8610": {
       "Properties": {
         "ClusterSettings": [
@@ -5398,7 +5834,59 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
             ],
             "Essential": true,
             "Image": {
-              "Fn::Sub": "\${AWS::AccountId}.dkr.ecr.\${AWS::Region}.\${AWS::URLSuffix}/cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}:[ASSET_HASH]",
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Fn::Select": [
+                      4,
+                      {
+                        "Fn::Split": [
+                          ":",
+                          {
+                            "Fn::GetAtt": [
+                              "TargetAppAppImageRepository14F3CF93",
+                              "Arn",
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  ".dkr.ecr.",
+                  {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          ":",
+                          {
+                            "Fn::GetAtt": [
+                              "TargetAppAppImageRepository14F3CF93",
+                              "Arn",
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix",
+                  },
+                  "/",
+                  {
+                    "Ref": "TargetAppAppImageRepository14F3CF93",
+                  },
+                  ":",
+                  {
+                    "Fn::GetAtt": [
+                      "TargetAppAppImage903B932A",
+                      "ImageTag",
+                    ],
+                  },
+                ],
+              ],
             },
             "LogConfiguration": {
               "LogDriver": "awslogs",
@@ -5480,26 +5968,9 @@ exports[`snapshot: 本体スタック (GamedayStack = 対象アプリ + 振り�
               ],
               "Effect": "Allow",
               "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    "arn:",
-                    {
-                      "Ref": "AWS::Partition",
-                    },
-                    ":ecr:",
-                    {
-                      "Ref": "AWS::Region",
-                    },
-                    ":",
-                    {
-                      "Ref": "AWS::AccountId",
-                    },
-                    ":repository/",
-                    {
-                      "Fn::Sub": "cdk-hnb659fds-container-assets-\${AWS::AccountId}-\${AWS::Region}",
-                    },
-                  ],
+                "Fn::GetAtt": [
+                  "TargetAppAppImageRepository14F3CF93",
+                  "Arn",
                 ],
               },
             },

@@ -17,15 +17,19 @@ export default defineConfig({
     // 注意: jsPlugins は overrides でスコープできない (プラグインは全ファイルを訪問する)。
     // 非 CDK コード側には tsconfig.json を置いて corsa の型解決を成立させる (dashboard/tsconfig.json)
     jsPlugins: ['oxlint-plugin-awscdk'],
-    settings: {
-      // corsa-oxlint (型認識リントの実行系) が Windows で JS シムを直接 spawn して
-      // os error 193 になるため、tsgo.exe 本体を明示する (プロジェクトルートからの相対)
-      corsaOxlint: {
-        corsa: {
-          executable: './node_modules/@typescript/native-preview-win32-x64/lib/tsgo.exe',
-        },
-      },
-    },
+    // corsa-oxlint (型認識リントの実行系) が Windows で JS シムを直接 spawn して
+    // os error 193 になるため、tsgo.exe 本体を明示する (プロジェクトルートからの相対)。
+    // Windows 限定の回避策 (win32 用の tsgo.exe パスは他 OS には存在しない)。
+    settings:
+      process.platform === 'win32'
+        ? {
+            corsaOxlint: {
+              corsa: {
+                executable: './node_modules/@typescript/native-preview-win32-x64/lib/tsgo.exe',
+              },
+            },
+          }
+        : {},
     // awscdk ルールは CDK コードのみに適用する。dashboard/ 等の非 CDK コードで
     // 型解決 (tsconfig 外) が走ると corsa が "no project found" で落ちるため
     overrides: [

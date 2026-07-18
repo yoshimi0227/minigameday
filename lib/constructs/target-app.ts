@@ -1,7 +1,9 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { ContainerImageBuild } from '@cdklabs/deploy-time-build';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -77,10 +79,18 @@ export class TargetApp extends Construct {
       memoryLimitMiB: 512,
     });
 
+    // app/ の Node アプリを Docker ビルド。ローカルに Docker が要らず、synth するマシンの CPU
+    // アーキテクチャにも依存しない (ecs.ContainerImage.fromAsset だとローカル docker build に
+    // なり、Arm ホスト (Apple Silicon 等) でビルドすると Fargate 既定の X86_64 と食い違って
+    // exec format error になる)。platform は明示的に amd64 を指定しておく。
+    const appImage = new ContainerImageBuild(this, 'AppImage', {
+      directory: path.join(__dirname, '..', '..', 'app'),
+      platform: ecrAssets.Platform.LINUX_AMD64,
+    });
+
     taskDefinition.addContainer('app', {
-      // app/ の Node アプリを Docker ビルド (deploy 時に Docker が必要)。
       // "/" で Aurora に SELECT 1 し、可否で 200/503 を返す。
-      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', '..', 'app')),
+      image: appImage.toEcsDockerImageCode(),
       portMappings: [{ containerPort: 80 }],
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'gameday-app' }),
       // データ層への接続情報をアプリ層へ受け渡し

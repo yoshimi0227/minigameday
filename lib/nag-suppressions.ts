@@ -58,5 +58,19 @@ export function suppressGamedayLabFindings(stack: Stack): void {
       reason:
         '学習ラボ: 非機密の接続情報 (DB_HOST 等) を環境変数で渡す。認証情報 (DB_SECRET) は Secrets Manager 経由',
     },
+    // --- deploy-time-build (@cdklabs/deploy-time-build の ContainerImageBuild) ---
+    // ローカル Docker 不要・アーキテクチャ非依存でアプリイメージをビルドするための構成。
+    // 内部で生成される Lambda/CodeBuild はライブラリ側の実装で、呼び出し側からランタイム・
+    // 暗号化設定を直接変更できない (本番転用時はライブラリの更新 or 自前実装への切り替えを検討)。
+    {
+      id: 'AwsSolutions-L1',
+      reason:
+        '学習ラボ: @cdklabs/deploy-time-build の内部 Lambda (CodeBuild 起動用カスタムリソース)。ランタイムはライブラリ側管理で呼び出し側から指定不可',
+    },
+    {
+      id: 'AwsSolutions-CB4',
+      reason:
+        '学習ラボ: @cdklabs/deploy-time-build の内部 CodeBuild プロジェクト。デプロイ時のみ動作し成果物は都度 ECR へ push されるため、KMS 鍵によるビルド時暗号化は非対象',
+    },
   ]);
 }

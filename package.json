@@ -42,6 +42,7 @@
     "vitest": "4.1.9"
   },
   "dependencies": {
+    "@cdklabs/deploy-time-build": "^0.1.6",
     "aws-cdk-lib": "^2.258.1",
     "aws-icons": "^3.3.0",
     "constructs": "^10.5.0",
@@ -58,5 +59,10 @@
       "version": "^11.16.0",
       "onFail": "download"
     }
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "lefthook@2.1.10": true,
+    "fsevents@2.3.3": true
   }
 }
