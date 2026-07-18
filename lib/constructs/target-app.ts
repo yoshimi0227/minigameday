@@ -79,9 +79,7 @@ export class TargetApp extends Construct {
       memoryLimitMiB: 512,
     });
 
-    // app/ の Node アプリを Docker ビルド。ContainerImageBuild (@cdklabs/deploy-time-build) は
-    // ビルド元をプレーンな S3 アセット (zip) としてアップロードするだけで、実際の `docker build`
-    // は deploy 時に CodeBuild 上で行う。ローカルに Docker が要らず、synth するマシンの CPU
+    // app/ の Node アプリを Docker ビルド。ローカルに Docker が要らず、synth するマシンの CPU
     // アーキテクチャにも依存しない (ecs.ContainerImage.fromAsset だとローカル docker build に
     // なり、Arm ホスト (Apple Silicon 等) でビルドすると Fargate 既定の X86_64 と食い違って
     // exec format error になる)。platform は明示的に amd64 を指定しておく。
