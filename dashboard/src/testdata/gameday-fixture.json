@@ -258,23 +258,5 @@
       "state": "OK",
       "reason": "SuccessPercent back to 100"
     }
-  ],
-  "review": {
-    "generatedAt": "2026-07-15T07:00:00Z",
-    "overall": "検知は canary 起点で安定して速い。一方で復旧手段が毎回アドホックなので、次回はランブック化を試したい。",
-    "reportPath": "retrospectives/2026-07-15-rehearsal.md",
-    "injects": [
-      {
-        "injectId": "inject-1",
-        "headline": "静観の判断が正解",
-        "commentary": "タスク停止から約 30 秒で ECS が自己回復し、canary の成功率は落ちなかった。\n「壊れたのに直さない」判断を観測ベースで下せたのが最大の収穫。",
-        "wentWell": [
-          "canary 成功率を最初に確認する動きが定着"
-        ],
-        "toImprove": [
-          "静観の判断基準を宣言としてダッシュボードに残す"
-        ]
-      }
-    ]
-  }
+  ]
 }

@@ -1,30 +1,17 @@
 {
   "event": {
-    "title": "ミニ GameDay リハーサル #3 — 2 ラウンド制 (観察 → 対応)",
-    "date": "2026-07-17",
-    "team": "solo (リハーサル)",
-    "note": "R1 観察 (自己回復) → R2 対応 (自己回復しない。人が desiredCount を戻すまで復旧しない)"
+    "title": "ミニ GameDay",
+    "date": "2026-07-18"
   },
-  "rounds": [
-    {
-      "round": 1,
-      "title": "観察ラウンド",
-      "description": "自己回復する障害。静観・判断の練習"
-    },
-    {
-      "round": 2,
-      "title": "対応ラウンド",
-      "description": "自己回復しない障害。人が直すまで復旧しない"
-    }
-  ],
   "systems": [
     {
       "id": "gameday-main",
-      "name": "本体 (GamedayStack)",
+      "name": "お題: 3 層 Web アプリ",
       "summary": "GameDay のお題となる 3 層 Web アプリ。トップページ \"/\" は Aurora に SELECT 1 を打ち、可否で 200/503 を返す。VPC は 2 AZ で、各層が専用サブネット (public / app / data) に分かれる。",
       "scenarioIds": [
         "scenario-01",
-        "scenario-02"
+        "scenario-02",
+        "scenario-05"
       ],
       "tiers": [
         {
@@ -82,158 +69,14 @@
         "\"/\" は読み取り (SELECT 1) だけなので、書き込み断は canary では見えない (scenario-02 の学び)",
         "全 FIS 実験の安全装置としてアラーム gameday-5xx-stop-condition (ELB+Target 5xx > 10/分) が停止条件に入っている"
       ]
-    },
-    {
-      "id": "gameday-legacy",
-      "name": "レガシー (GameDay-Legacy)",
-      "summary": "scenario-03 の出発点となる、あえて壊れやすくした別スタック。アプリは本体と同じコンテナイメージだが、単一 EC2 上の Docker で動く (Auto Scaling なし = SPOF)。復旧時は参加者が同じイメージを ECS (Fargate) に載せ替える。",
-      "scenarioIds": [
-        "scenario-03"
-      ],
-      "tiers": [
-        {
-          "name": "利用者・外形監視",
-          "nodes": [
-            {
-              "service": "利用者",
-              "icon": "users",
-              "label": "HTTP でトップページへ"
-            },
-            {
-              "service": "Synthetics canary",
-              "icon": "synthetics",
-              "label": "gameday-legacy-top — 1 分間隔。赤いままの時間が復旧作業の進行表示になる"
-            }
-          ]
-        },
-        {
-          "name": "Web/LB 層 — public サブネット",
-          "icon": "public-subnet",
-          "nodes": [
-            {
-              "service": "ALB",
-              "icon": "alb",
-              "label": "ターゲットグループは ip 型 (EC2 の私設 IP も復旧後の Fargate も載る)"
-            }
-          ]
-        },
-        {
-          "name": "アプリ層 — app サブネット",
-          "icon": "private-subnet",
-          "nodes": [
-            {
-              "service": "EC2 (t3.micro)",
-              "icon": "ec2",
-              "label": "単一インスタンス = SPOF。user data の Docker でアプリを起動"
-            }
-          ],
-          "note": "HealthyHostCount = 1 が SPOF の証拠。復旧材料 (ECR イメージ / ECS クラスタ gameday-rebuild / タスク実行ロール / 共有 SG / ロググループ) は事前に用意済み"
-        },
-        {
-          "name": "データ層 — data (隔離) サブネット",
-          "icon": "private-subnet",
-          "nodes": [
-            {
-              "service": "Aurora MySQL Serverless v2",
-              "icon": "aurora",
-              "label": "writer のみ (このシナリオに DB 冗長は不要)"
-            }
-          ]
-        }
-      ],
-      "notes": [
-        "本体スタックとは独立して deploy / destroy できる自己完結スタック",
-        "復旧に必要な値 (イメージ URI / SG / サブネット / ロール ARN 等) は CloudFormation Outputs をハンドアウトとして配る"
-      ]
-    },
-    {
-      "id": "gameday-dr",
-      "name": "DR 構成 (scenario-04 予定)",
-      "summary": "scenario-04 (東京リージョン障害の模擬 → 大阪へ DR 切替) 用のウォームスタンバイ構成。シナリオは draft で前提インフラは未構築。DR 発動で切り替えるのは「入口 (Route 53)」と「データ (Aurora Global Database)」の 2 箇所だけ。",
-      "scenarioIds": [
-        "scenario-04"
-      ],
-      "tiers": [
-        {
-          "name": "入口",
-          "nodes": [
-            {
-              "service": "Route 53",
-              "icon": "route53",
-              "label": "app.<domain> の ALIAS が東京 ALB を指す。DR 発動でここを大阪へ切り替える"
-            },
-            {
-              "service": "Synthetics canary",
-              "icon": "synthetics",
-              "label": "gameday-top — 向き先を ALB DNS 名から Route 53 レコード名に変更"
-            }
-          ]
-        },
-        {
-          "name": "東京 ap-northeast-1 (プライマリ)",
-          "icon": "region",
-          "nodes": [
-            {
-              "service": "ALB",
-              "icon": "alb"
-            },
-            {
-              "service": "ECS Fargate",
-              "icon": "fargate",
-              "count": 2
-            },
-            {
-              "service": "Aurora Global Database",
-              "icon": "aurora",
-              "label": "プライマリクラスタ"
-            }
-          ]
-        },
-        {
-          "name": "大阪 ap-northeast-3 (ウォームスタンバイ)",
-          "icon": "region",
-          "nodes": [
-            {
-              "service": "ALB",
-              "icon": "alb"
-            },
-            {
-              "service": "ECS Fargate",
-              "icon": "fargate",
-              "count": 1,
-              "label": "縮小構成で常時稼働"
-            },
-            {
-              "service": "Aurora Global Database",
-              "icon": "aurora",
-              "label": "セカンダリ。DR 発動でライターへ昇格"
-            }
-          ],
-          "note": "Aurora Global Database がストレージレベルで東京→大阪へレプリケーション (AuroraGlobalDBReplicationLag < 1 秒)"
-        }
-      ],
-      "notes": [
-        "RTO は canary の赤→緑で実測、RPO はフェイルオーバー時点のレプリケーション遅延で実測する"
-      ]
     }
   ],
   "injects": [
     {
-      "id": "r1-stop",
-      "scenarioId": "scenario-01",
-      "round": 1,
-      "title": "タスク停止 (観察)",
-      "instruction": "R1: Fargate タスクを 1 つ停止。自己回復するので静観が正解になりうる。",
-      "maxScore": 100,
-      "experimentTemplateId": "EXT9tJVDV2FNk2C3A",
-      "status": "pending"
-    },
-    {
       "id": "r2-scale",
       "scenarioId": "scenario-05",
-      "round": 2,
-      "title": "desiredCount=0 (対応)",
-      "instruction": "R2: Fargate を desiredCount=0 に落とす。自己回復しない。参加者が 2 に戻すまで復旧しない。",
+      "title": "Web アプリ全断 (要・手動復旧)",
+      "instruction": "Fargate が desiredCount=0 に落とされる。自己回復しないため、原因を特定して desiredCount を 2 に戻すまでサイトは全断のまま。",
       "maxScore": 100,
       "hints": [
         {

@@ -1,12 +1,14 @@
+import { spawn } from 'node:child_process';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react-oxc';
 import { DynamoDBClient, PutItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { deriveFromEvents } from './src/scoring';
+import { FisClient, StartExperimentCommand } from '@aws-sdk/client-fis';
+import { deriveFromEvents, findStartCandidate } from './src/scoring';
 import { generateReview } from './review-generator';
-import type { GameEvent, GamedayData, HintReveal } from './src/types';
+import { AI_FEEDBACK_AUTHOR, type GameEvent, type GamedayData, type HintReveal } from './src/types';
 
 // ---------------------------------------------------------------------------
 // gameday.json への書き込みは全てこのヘルパを通す (dev サーバ内で直列化)。
@@ -247,7 +249,9 @@ function scoreSyncApi(): Plugin {
 
 /**
  * AI 講評の生成エンドポイント。POST /api/review → gameday.json の実測データを材料に
- * Bedrock (Mantle) 経由で Claude を呼び、review セクションを書き込む (→ ReviewBoard に表示)。
+ * Bedrock (Converse API) で LLM を呼び、KPT 形式の講評を feedback[] に書き込む
+ * (author='AI 講評'。KPT ボードに人間のフィードバックと並んで出る)。
+ * 再生成は AI 講評エントリだけを入れ替える (人間の KPT は触らない)。
  * 生成は数十秒〜数分かかるため直列化し、生成中の再実行は 409 で弾く。
  * 認証は AWS_BEARER_TOKEN_BEDROCK (Bedrock API キー) か既定の AWS 認証チェーン。
  */
@@ -266,19 +270,131 @@ function reviewApi(): Plugin {
         // なり得るうえ、同期例外だと .finally に届かず generating が立ちっぱなしになる。
         void updateGamedayJson(dataPath, (data) => ({ changed: false, result: data }))
           .then((data) => generateReview(data))
-          .then((review) =>
+          .then((items) =>
             updateGamedayJson(dataPath, (d) => {
-              d.review = review;
-              return { changed: true, result: undefined };
+              const human = (d.feedback ?? []).filter((f) => f.author !== AI_FEEDBACK_AUTHOR);
+              d.feedback = [...human, ...items];
+              return { changed: true, result: items.length };
             }),
           )
-          .then(() => sendJson(res, 200, { ok: true }))
+          .then((count) => sendJson(res, 200, { ok: true, count }))
           .catch((e: unknown) =>
             sendJson(res, 500, { error: e instanceof Error ? e.message : String(e) }),
           )
           .finally(() => {
             generating = false;
           });
+      });
+    },
+  };
+}
+
+/**
+ * 「GameDay 開始」エンドポイント。POST /api/start {injectId} → 対象インジェクトの
+ * FIS 実験を開始する (fis:StartExperiment)。CDK デプロイ後の 1 発目を画面から叩けるようにする。
+ *
+ * ガード: findStartCandidate (scoring.ts) で「まだ何も始まっていない + 対象が一致」を
+ * サーバ側でも確認する (二重クリック・古い画面からの誤発火を 409 で弾く)。
+ * 開始後の記録 (armed/impacted/採点) は GameEvents の自動記録が拾うので、ここでは
+ * gameday.json に何も書かない。認証は score 同期と同じ既定クレデンシャルチェーン。
+ */
+function gameStartApi(): Plugin {
+  const fis = new FisClient({});
+  return {
+    name: 'gameday-start-api',
+    configureServer(server: ViteDevServer) {
+      const dataPath = gamedayJsonPath(server);
+      server.middlewares.use('/api/start', (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
+        void readJsonBody(req)
+          .then((body) => {
+            const { injectId } = body;
+            if (typeof injectId !== 'string') {
+              return sendJson(res, 400, { error: 'injectId が必要' });
+            }
+            // 読み取りも直列化キューを通す (手編集の tmp→rename と競合させない)
+            return updateGamedayJson(dataPath, (data) => ({
+              changed: false,
+              result: findStartCandidate(data),
+            })).then(async (candidate) => {
+              if (!candidate) {
+                return sendJson(res, 409, {
+                  error: '開始できない (既に開始済みか、experimentTemplateId 付きインジェクトが無い)',
+                });
+              }
+              if (candidate.id !== injectId || !candidate.experimentTemplateId) {
+                return sendJson(res, 409, {
+                  error: `開始対象は ${candidate.id}。画面を更新して再実行する`,
+                });
+              }
+              try {
+                const out = await fis.send(
+                  new StartExperimentCommand({
+                    experimentTemplateId: candidate.experimentTemplateId,
+                  }),
+                );
+                sendJson(res, 200, { ok: true, experimentId: out.experiment?.id });
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                sendJson(res, 500, {
+                  error: `実験を開始できない: ${msg} (スタック未デプロイ / 未認証シェル?)`,
+                });
+              }
+            });
+          })
+          .catch(() => sendJson(res, 400, { error: 'invalid json' }));
+      });
+    },
+  };
+}
+
+/**
+ * 「リトライ (周回リセット)」エンドポイント。POST /api/reset → `npm run reset`
+ * (実験停止 → revert-drift デプロイ → gameday-score ワイプ → gameday.json 初期化) を
+ * 子プロセスで実行する。数分かかるので 202 で受け付け、GET /api/reset が進行状況を返す
+ * (running / ok / tail = ログ末尾)。同時実行は 409。コマンドは固定でリクエスト内容を
+ * 一切混ぜない (dev 専用エンドポイントだが念のため)。
+ */
+function resetApi(): Plugin {
+  const state: { running: boolean; ok?: boolean; finishedAt?: string } = { running: false };
+  let tail: string[] = [];
+  return {
+    name: 'gameday-reset-api',
+    configureServer(server: ViteDevServer) {
+      // dev サーバの root は dashboard/ なのでプロジェクトルートは 1 つ上
+      const projectRoot = join(server.config.root, '..');
+      server.middlewares.use('/api/reset', (req, res) => {
+        if (req.method === 'GET') {
+          return sendJson(res, 200, { ...state, tail: tail.slice(-5) });
+        }
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
+        if (state.running) return sendJson(res, 409, { error: '周回リセットを実行中' });
+
+        state.running = true;
+        state.ok = undefined;
+        state.finishedAt = undefined;
+        tail = [];
+        // Windows では npm が npm.cmd のため shell 経由で起動する (reset script の runCli と同じ)
+        const child = spawn('npm', ['run', 'reset'], { cwd: projectRoot, shell: true });
+        const onChunk = (chunk: Buffer) => {
+          tail.push(...chunk.toString().split(/\r?\n/).filter(Boolean));
+          tail = tail.slice(-30);
+        };
+        child.stdout?.on('data', onChunk);
+        child.stderr?.on('data', onChunk);
+        child.on('error', (e) => {
+          tail.push(String(e));
+          state.running = false;
+          state.ok = false;
+          state.finishedAt = new Date().toISOString();
+        });
+        child.on('close', (code) => {
+          state.running = false;
+          state.ok = code === 0;
+          state.finishedAt = new Date().toISOString();
+          console.log(`[gameday] 周回リセット終了 (exit ${code})`);
+        });
+        sendJson(res, 202, { started: true });
       });
     },
   };
@@ -383,5 +499,14 @@ function gameEventsSync(): Plugin {
 // ディレクトリを root として実行されるため、ここに置く (ルートの vite.config.ts は
 // CDK プロジェクト全体の test / lint 設定を持つ)。
 export default defineConfig({
-  plugins: [react(), hintRevealApi(), ackApi(), scoreSyncApi(), gameEventsSync(), reviewApi()],
+  plugins: [
+    react(),
+    hintRevealApi(),
+    ackApi(),
+    scoreSyncApi(),
+    gameEventsSync(),
+    reviewApi(),
+    gameStartApi(),
+    resetApi(),
+  ],
 });

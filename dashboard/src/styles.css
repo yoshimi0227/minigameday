@@ -651,31 +651,8 @@ code {
   text-transform: none;
 }
 
-/* --- 振り返りレビュー --- */
-.review-overall {
-  white-space: pre-line;
-  margin: 0 0 22px;
-  font-size: 17px;
-  font-weight: 500;
-  line-height: 1.75;
-  color: var(--text-primary);
-  max-width: 70ch;
-}
-.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
-.review-card {
-  border-top: 3px solid var(--accent);
-  padding: 14px 0 0;
-}
-.review-headline { margin: 0; font-size: 15px; font-weight: 900; }
-.review-inject { margin: 4px 0 10px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
-.review-commentary { white-space: pre-line; margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
-.review-list { margin: 0 0 6px; padding-left: 18px; font-size: 13px; }
-.review-list li { margin-bottom: 3px; }
-.review-list.went-well li::marker { color: var(--status-good); }
-.review-list.to-improve li::marker { color: var(--status-warning); }
-
-/* --- AI 講評の生成ボタン (dev サーバのみ) --- */
-.review-control { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+/* --- AI 講評の生成ボタン (dev サーバのみ。生成結果は KPT ボードに載る) --- */
+.review-control { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 14px; }
 .review-generate {
   font: inherit;
   font-size: 13px;
@@ -691,6 +668,27 @@ code {
 .review-generate:hover { filter: brightness(1.08); }
 .review-generate:disabled { opacity: 0.6; cursor: progress; }
 .review-error { color: var(--status-critical); font-size: 13px; }
+
+/* --- ゲーム進行コントロール: GameDay 開始 / リトライ (dev サーバのみ) --- */
+.game-control { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: -8px 0 4px; }
+.game-start,
+.game-retry {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 9px 20px;
+  white-space: nowrap;
+}
+.game-start { color: var(--surface-solid); background: var(--accent); border: none; }
+.game-start:hover { filter: brightness(1.08); }
+.game-start:disabled { opacity: 0.6; cursor: progress; }
+.game-retry { color: var(--status-critical); background: transparent; border: 1.5px solid var(--status-critical); }
+.game-retry:hover { filter: brightness(1.08); }
+.game-retry.armed { color: var(--surface-solid); background: var(--status-critical); }
+.game-note { font-size: 13px; color: var(--text-muted); }
+.game-error { font-size: 13px; color: var(--status-critical); }
 
 /* --- 狭い画面 --- */
 @media (max-width: 560px) {

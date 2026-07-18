@@ -235,7 +235,7 @@ function resetGamedayJson(dryRun: boolean): void {
   const injects = (data.injects ?? []) as Record<string, unknown>[];
 
   if (dryRun) {
-    const dynamic = ['events', 'review', 'feedback', 'hintReveals']
+    const dynamic = ['events', 'feedback', 'hintReveals']
       .filter((k) => {
         const v = data[k];
         return Array.isArray(v) ? v.length > 0 : v !== undefined;
@@ -263,11 +263,10 @@ function resetGamedayJson(dryRun: boolean): void {
     out.status = 'pending';
     return out;
   });
-  reset.feedback = [];
+  reset.feedback = []; // AI 講評含む KPT は持ち越さない (前回分は archive に残る)
   reset.hintReveals = [];
   if (data.scoring !== undefined) reset.scoring = data.scoring;
   reset.events = [];
-  // review は意図的に持ち越さない (前回の講評は archive とレポートに残る)
 
   // dev サーバのポーリングに部分書き込みを読ませない (vite.config.ts と同じ tmp→rename)
   const tmp = `${DATA_PATH}.tmp`;

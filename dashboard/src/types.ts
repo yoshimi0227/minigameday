@@ -103,22 +103,13 @@ export interface GameEvent {
   injectId?: string;
 }
 
-/** インジェクト 1 件ぶんの振り返り講評 (gameday-retrospective スキルが生成) */
-export interface ReviewInject {
-  injectId: string;
-  headline: string; // 一言の見出し (例: "静観の判断が正解")
-  commentary: string; // 講評本文 (タイムライン・ヒント消費・drift を織り込む)
-  wentWell?: string[];
-  toImprove?: string[];
-}
-
-/** ゲーム終了後の振り返りレビュー。存在するときだけダッシュボードに表示される */
-export interface Review {
-  generatedAt: string; // ISO8601
-  overall: string; // 総評
-  reportPath?: string; // retrospectives/ の詳細レポートへのパス
-  injects: ReviewInject[];
-}
+/**
+ * AI 講評が feedback[] に書き込むときの author 値。
+ * 再生成時はこの author のエントリを入れ替える (人間の KPT は触らない)。
+ * かつては独立した Review セクション + retrospectives/ レポートだったが、
+ * 2026-07-18 に「講評も KPT 形式で同じボードへ」に一本化した。
+ */
+export const AI_FEEDBACK_AUTHOR = 'AI 講評';
 
 /** 構成図のノード (AWS リソース 1 つ分) */
 export interface SystemNode {
@@ -181,7 +172,6 @@ export interface GamedayData {
   scoring?: ScoringConfig; // 自動採点のカーブ設定 (無ければ DEFAULT_SCORING)
   escalation?: EscalationConfig; // エスカレーションの運用スイッチ (無ければ有効)
   events?: GameEvent[]; // ゲームイベントログ (gameEventsSync が追記。タイムライン素材)
-  review?: Review; // ゲーム終了後の振り返りレビュー (あるときだけ表示)
 }
 
 export function fmtMinutes(value: number): string {

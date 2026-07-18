@@ -38,9 +38,10 @@ export default function Architecture({
         onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
       >
         <summary className="arch-head">
-          <h2>システム構成 (参考資料)</h2>
+          <h2>お題システム</h2>
           <p className="card-sub">
-            お題システムの「元の構成」と補足。障害はこの定常状態からの逸脱として観測する。
+            今日の GameDay で障害が注入される対象。これが「元の構成」(定常状態) で、
+            ここからの逸脱を canary とメトリクスで観測して対応する。
           </p>
         </summary>
 
@@ -60,10 +61,9 @@ export default function Architecture({
           </div>
         )}
 
+        {/* scenarioIds は運営用のデータ紐付け (scenarios/ との突き合わせ)。内部 ID を
+            参加者に見せても意味が無いので画面には出さない (2026-07-18 リハーサル判断) */}
         <p className="arch-summary">{active.summary}</p>
-        {active.scenarioIds.length > 0 && (
-          <p className="arch-scenarios">{`対象シナリオ: ${active.scenarioIds.join(' / ')}`}</p>
-        )}
 
         <div className="arch-diagram">
           {active.tiers.map((tier, i) => (

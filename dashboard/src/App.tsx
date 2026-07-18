@@ -6,10 +6,10 @@ import ScoreTable from './ScoreTable';
 import TimeChart, { ChartLegend } from './TimeChart';
 import KptBoard from './KptBoard';
 import HintSummary from './HintSummary';
-import ReviewBoard from './ReviewBoard';
 import ReviewControl from './ReviewControl';
+import GameControl from './GameControl';
 import { effectiveScore } from './scoring';
-import type { GamedayData } from './types';
+import { AI_FEEDBACK_AUTHOR, type GamedayData } from './types';
 
 const POLL_MS = 3000; // gameday.json を 3 秒ごとに再取得してリアルタイム反映
 const HINTS_STORAGE_KEY = 'gameday-revealed-hints';
@@ -28,8 +28,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null); // 初回ロード失敗のみ全画面エラー
   const [stale, setStale] = useState(false); // ポーリング失敗 (前回表示を保持)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [scenarioId, setScenarioId] = useState('');
-  const [round, setRound] = useState(''); // ラウンドフィルタ ('' = すべて)
   // クライアント側の楽観的開示 (即時反映 + 静的ビルドのフォールバック)。
   // サーバに記録された data.hintReveals と union して最終的な開示集合にする。
   const [localReveals, setLocalReveals] = useState<Set<string>>(loadRevealed);
@@ -147,25 +145,14 @@ export default function App() {
   }
   if (!data) return null;
 
-  // 楽観更新の検知宣言をマージ (サーバ記録 inject.ackAt が正、無ければローカル宣言を表示)
-  const injectsAll = data.injects.map((i) =>
+  // 楽観更新の検知宣言をマージ (サーバ記録 inject.ackAt が正、無ければローカル宣言を表示)。
+  // ラウンド/シナリオの絞り込みプルダウンは 2026-07-18 のリハーサルで「選択肢がほぼ無く
+  // ノイズ」と判断して撤去した (参加者 1 人・少インジェクト運用)。ラウンドの見出し行・
+  // 小計 (ScoreTable) は情報として残っている。
+  const injects = data.injects.map((i) =>
     !i.ackAt && localAcks.has(i.id) ? { ...i, ackAt: localAcks.get(i.id) } : i,
   );
-  // シナリオ AND ラウンドで絞り込む (scenarioId の仕組みと同型)
-  const injects = injectsAll.filter(
-    (i) =>
-      (!scenarioId || i.scenarioId === scenarioId) &&
-      (!round || String(i.round) === round),
-  );
-  const feedback = scenarioId
-    ? data.feedback.filter((f) => f.scenarioId === scenarioId || f.scenarioId == null)
-    : data.feedback;
-  const scenarioIds = [
-    ...new Set(data.injects.map((i) => i.scenarioId).filter((v): v is string => Boolean(v))),
-  ];
-  const roundValues = [
-    ...new Set(data.injects.map((i) => i.round).filter((v): v is number => typeof v === 'number')),
-  ].sort((a, b) => a - b);
+  const feedback = data.feedback;
 
   // 最終的な開示集合 = サーバ記録 (hintReveals) ∪ クライアント楽観更新
   const serverRevealedIds = (data.hintReveals ?? []).map((r) => r.hintId);
@@ -189,40 +176,23 @@ export default function App() {
         </div>
       </header>
 
-      {/* フィルター行: この下の全セクション (タイル・表・チャート・KPT) をスコープする */}
-      <div className="filter-row">
-        {roundValues.length > 0 && (
-          <label className="filter">
-            <span className="filter-label">ラウンド</span>
-            <select value={round} onChange={(e) => setRound(e.target.value)}>
-              <option value="">すべて</option>
-              {roundValues.map((r) => (
-                <option key={r} value={String(r)}>
-                  {data.rounds?.find((d) => d.round === r)?.title ?? `ラウンド ${r}`}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className="filter">
-          <span className="filter-label">シナリオ</span>
-          <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
-            <option value="">すべて</option>
-            {scenarioIds.map((id) => (
-              <option key={id} value={id}>{id}</option>
-            ))}
-          </select>
-        </label>
-        {data.event.note && <p className="filter-note">{data.event.note}</p>}
-      </div>
+      {/* 運営用のゲーム進行コントロール: GameDay 開始 / リトライ (周回リセット)。
+          dev サーバの /api/start・/api/reset を呼ぶため dev のみ (静的ビルドには出ない) */}
+      {import.meta.env.DEV && <GameControl data={data} />}
 
-      {/* 進行中インシデント: シナリオフィルタに関わらず常に表示する (見逃し防止) */}
-      <AckBanner injects={injectsAll} onAck={ack} />
+      {data.event.note && (
+        <div className="filter-row">
+          <p className="filter-note">{data.event.note}</p>
+        </div>
+      )}
+
+      {/* 進行中インシデント: 常に表示する (見逃し防止) */}
+      <AckBanner injects={injects} onAck={ack} />
 
       <Tiles injects={injects} revealed={revealed} scoring={data.scoring} />
 
       {data.systems && data.systems.length > 0 && (
-        <Architecture systems={data.systems} scenarioId={scenarioId} />
+        <Architecture systems={data.systems} scenarioId="" />
       )}
 
       <section className="card">
@@ -261,15 +231,17 @@ export default function App() {
       <section className="card">
         <h2>振り返りフィードバック</h2>
         <p className="card-sub">
-          KPT (Keep / Problem / Try)。詳細な振り返りは <code>retrospectives/</code> のレポートに残す。
+          KPT (Keep / Problem / Try)。「AI 講評」ボタンは実測データ (タイムライン・採点・ヒント消費)
+          から KPT を自動生成し、このボードに author 付きで並ぶ。
         </p>
         <KptBoard feedback={feedback} />
+        {/* AI 講評の生成 (dev サーバの /api/review → Bedrock)。再生成は AI 分だけ入れ替え */}
+        {import.meta.env.DEV && (
+          <ReviewControl
+            hasAiFeedback={feedback.some((f) => f.author === AI_FEEDBACK_AUTHOR)}
+          />
+        )}
       </section>
-
-      {/* ゲーム終了後: AI 講評。dev サーバの /api/review (Bedrock 経由) が review を生成して
-          書き込むと現れる。gameday-retrospective スキルによる手動書き込みでも表示は同じ */}
-      {import.meta.env.DEV && <ReviewControl hasReview={Boolean(data.review)} />}
-      {data.review && <ReviewBoard review={data.review} injects={data.injects} />}
 
       <footer className="page-footer">
         <p>

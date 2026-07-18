@@ -2,9 +2,11 @@ import { test, expect } from 'vitest';
 import {
   DEFAULT_SCORING,
   autoScore,
+  canRetry,
   decayPoints,
   deriveFromEvents,
   effectiveScore,
+  findStartCandidate,
   resolveScore,
 } from './scoring';
 import type { GameEvent, GamedayData, Inject } from './types';
@@ -294,6 +296,41 @@ test('deriveFromEvents: FIS イベント取り逃し時は experimentStartedAt �
   deriveFromEvents(data);
   expect(inject.impactStartAt).toBe('2026-07-15T02:10:00Z');
   expect(inject.status).toBe('recovered');
+});
+
+// ---- ゲーム進行 (GameControl / dev サーバの /api/start が使う) ----
+
+test('findStartCandidate: 全て pending なら最初の experimentTemplateId 付き inject を返す', () => {
+  const fresh = makeData(
+    [
+      { id: 'i0', title: '手動インジェクト' }, // experimentTemplateId 無し = 開始対象にしない
+      { id: 'i1', title: 't', experimentTemplateId: 'EXT1', status: 'pending' },
+    ],
+    [],
+  );
+  expect(findStartCandidate(fresh)?.id).toBe('i1');
+  // 対象になる inject が無ければ null
+  expect(findStartCandidate(makeData([{ id: 'i0', title: 'manual' }], []))).toBeNull();
+});
+
+test('findStartCandidate: 何かが始まっていたら null (実験イベント / pending 以外の status / 開始時刻)', () => {
+  const inject = { id: 'i1', title: 't', experimentTemplateId: 'EXT1' };
+  expect(
+    findStartCandidate(makeData([{ ...inject }], [running('2026-07-15T02:00:00Z', 'EXP1', 'EXT1')])),
+  ).toBeNull();
+  expect(findStartCandidate(makeData([{ ...inject, status: 'armed' }], []))).toBeNull();
+  expect(
+    findStartCandidate(makeData([{ ...inject, experimentStartedAt: '2026-07-15T02:00:00Z' }], [])),
+  ).toBeNull();
+});
+
+test('canRetry: KPT フィードバックが残ったら true (振り返り後にリトライを出す。AI 講評も feedback に載る)', () => {
+  const empty = makeData([], []);
+  expect(canRetry(empty)).toBe(false);
+  expect(canRetry({ ...empty, feedback: [{ type: 'keep', comment: 'x' }] })).toBe(true);
+  expect(
+    canRetry({ ...empty, feedback: [{ type: 'try', comment: 'x', author: 'AI 講評' }] }),
+  ).toBe(true);
 });
 
 test('DEFAULT_SCORING: ルーブリック配分 (検知 40 / 復旧 40 / 伝達 20) を守る', () => {

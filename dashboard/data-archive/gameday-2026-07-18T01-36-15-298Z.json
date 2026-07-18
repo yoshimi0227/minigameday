@@ -1,0 +1,201 @@
+{
+  "event": {
+    "title": "ミニ GameDay",
+    "date": "2026-07-18"
+  },
+  "systems": [
+    {
+      "id": "gameday-main",
+      "name": "お題: 3 層 Web アプリ",
+      "summary": "GameDay のお題となる 3 層 Web アプリ。トップページ \"/\" は Aurora に SELECT 1 を打ち、可否で 200/503 を返す。VPC は 2 AZ で、各層が専用サブネット (public / app / data) に分かれる。",
+      "scenarioIds": [
+        "scenario-01",
+        "scenario-02",
+        "scenario-05"
+      ],
+      "tiers": [
+        {
+          "name": "利用者・外形監視",
+          "nodes": [
+            {
+              "service": "利用者",
+              "icon": "users",
+              "label": "HTTP でトップページへ"
+            },
+            {
+              "service": "Synthetics canary",
+              "icon": "synthetics",
+              "label": "gameday-top — 1 分間隔で \"/\" を外形監視 (Playwright)"
+            }
+          ]
+        },
+        {
+          "name": "Web/LB 層 — public サブネット",
+          "icon": "public-subnet",
+          "nodes": [
+            {
+              "service": "ALB",
+              "icon": "alb",
+              "label": "internet-facing / HTTP:80。ヘルスチェックは /healthz (DB 非依存)"
+            }
+          ]
+        },
+        {
+          "name": "アプリ層 — app サブネット",
+          "icon": "private-subnet",
+          "nodes": [
+            {
+              "service": "ECS Fargate",
+              "icon": "fargate",
+              "count": 2,
+              "label": "Node アプリ。desiredCount=2 / minHealthyPercent=50 (1 タスク落ちても継続)"
+            }
+          ]
+        },
+        {
+          "name": "データ層 — data (隔離) サブネット",
+          "icon": "private-subnet",
+          "nodes": [
+            {
+              "service": "Aurora MySQL Serverless v2",
+              "icon": "aurora",
+              "label": "writer + reader (別 AZ)。認証情報は Secrets Manager 経由"
+            }
+          ]
+        }
+      ],
+      "notes": [
+        "判断の起点は canary: 緑のまま = ユーザー影響なし。主要メトリクスは CloudWatch ダッシュボード gameday-review に揃っている",
+        "\"/\" は読み取り (SELECT 1) だけなので、書き込み断は canary では見えない (scenario-02 の学び)",
+        "全 FIS 実験の安全装置としてアラーム gameday-5xx-stop-condition (ELB+Target 5xx > 10/分) が停止条件に入っている"
+      ]
+    }
+  ],
+  "injects": [
+    {
+      "id": "r2-scale",
+      "scenarioId": "scenario-05",
+      "title": "Web アプリ全断 (要・手動復旧)",
+      "instruction": "Fargate が desiredCount=0 に落とされる。自己回復しないため、原因を特定して desiredCount を 2 に戻すまでサイトは全断のまま。",
+      "maxScore": 100,
+      "hints": [
+        {
+          "id": "hr2-1",
+          "label": "方針",
+          "cost": 5,
+          "text": "ECS サービスの desiredCount と RunningTaskCount を見る。"
+        },
+        {
+          "id": "hr2-2",
+          "label": "具体手順",
+          "cost": 20,
+          "text": "aws ecs update-service --desired-count 2 で戻す。"
+        }
+      ],
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "recovered",
+      "experimentId": "EXPv61nbDNMztyxDK8",
+      "experimentStartedAt": "2026-07-18T00:24:59Z",
+      "impactStartAt": "2026-07-18T00:26:49Z",
+      "ackAt": "2026-07-18T00:46:32.635Z",
+      "detectionMinutes": 19.7,
+      "recoveredAt": "2026-07-18T00:47:49Z",
+      "recoveryMinutes": 21
+    }
+  ],
+  "feedback": [
+    {
+      "type": "problem",
+      "comment": "インジェクト「Web アプリ全断 (要・手動復旧)」での検知は、影響開始から19.7分後でした。検知宣言は 2分以内満点のところ、15分以内であれば満点とします。この場合は19.7分で検知宣言を行っています。",
+      "scenarioId": "scenario-05",
+      "author": "AI 講評"
+    },
+    {
+      "type": "problem",
+      "comment": "インジェクト「Web アプリ全断 (要・手動復旧)」での復旧は、影響開始から21分後でした。復旧には5分以内満点のところ、この場合は21分かかっています。",
+      "scenarioId": "scenario-05",
+      "author": "AI 講評"
+    },
+    {
+      "type": "try",
+      "comment": "次回は、影響開始からの検知を2分以内に、復旧を5分以内に抑えるよう、監視ツールの設定や手動チェックの頻度を見直しましょう。",
+      "scenarioId": "scenario-05",
+      "author": "AI 講評"
+    }
+  ],
+  "hintReveals": [],
+  "escalation": {
+    "enabled": false
+  },
+  "scoring": {
+    "detection": {
+      "maxPoints": 40,
+      "fullWithinMinutes": 2,
+      "zeroAfterMinutes": 15
+    },
+    "recovery": {
+      "maxPoints": 40,
+      "fullWithinMinutes": 5,
+      "zeroAfterMinutes": 30
+    },
+    "commsMaxPoints": 20
+  },
+  "events": [
+    {
+      "key": "EVENT#2026-07-18T00:24:59Z#15310a81-1a19-97d2-cd0a-4c77becabcd7",
+      "type": "experiment",
+      "at": "2026-07-18T00:24:59Z",
+      "experimentId": "EXPv61nbDNMztyxDK8",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "running"
+    },
+    {
+      "key": "EVENT#2026-07-18T00:25:52Z#3478a067-1a45-0081-f44a-63e024727642",
+      "type": "experiment",
+      "at": "2026-07-18T00:25:52Z",
+      "experimentId": "EXPv61nbDNMztyxDK8",
+      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "status": "completed"
+    },
+    {
+      "key": "EVENT#2026-07-18T00:26:49Z#da002501-9fb0-a75c-34c9-a05d7d051fdb",
+      "type": "alarm",
+      "at": "2026-07-18T00:26:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "ALARM",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [0.0 (18/07/26 00:25:00)] was less than the threshold (100.0) (minimum 1 datapoint for OK -> ALARM transition)."
+    },
+    {
+      "key": "ACK#r2-scale",
+      "type": "ack",
+      "at": "2026-07-18T00:46:32.635Z",
+      "injectId": "r2-scale"
+    },
+    {
+      "key": "EVENT#2026-07-18T00:47:49Z#ee9b54cd-e624-5a64-e7c5-5d4f5fb06140",
+      "type": "alarm",
+      "at": "2026-07-18T00:47:49Z",
+      "alarmName": "gameday-canary-health",
+      "state": "OK",
+      "reason": "Threshold Crossed: 1 out of the last 1 datapoints [100.0 (18/07/26 00:46:00)] was not less than the threshold (100.0) (minimum 1 datapoint for ALARM -> OK transition)."
+    }
+  ],
+  "review": {
+    "generatedAt": "2026-07-18T00:49:45.924Z",
+    "overall": "全体として、参加者の対応は概ね良好であった。特に検知と復旧のタイミングは速かったが、原因特定に時間がかかり、より効率的な対応が可能だった。",
+    "injects": [
+      {
+        "injectId": "r2-scale",
+        "headline": "Web アプリ全断の原因特定に時間がかかった",
+        "commentary": "影響が開始して 20 分以上経過しても原因特定ができず、復旧に時間がかかった。ECS サービスの desiredCount と RunningTaskCount を確認することで原因を特定し、復旧できた。",
+        "wentWell": [
+          "検知は 19.7 分で行われ、速かった",
+          "復旧は 21 分で行われ、タイムライン上は良好"
+        ],
+        "toImprove": [
+          "原因特定に時間がかかった。ECS サービスの desiredCount と RunningTaskCount の確認が早ければ、復旧が早かったかもしれない"
+        ]
+      }
+    ]
+  }
+}

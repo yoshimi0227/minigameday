@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
 /**
- * AI 講評の生成ボタン (dev サーバ専用)。POST /api/review が Bedrock 経由で Claude を呼び、
- * gameday.json の review に書き込む → ポーリングで数秒後に ReviewBoard として表示される。
+ * AI 講評の生成ボタン (dev サーバ専用)。POST /api/review が Bedrock 経由で LLM を呼び、
+ * KPT 形式の講評を feedback[] (author='AI 講評') に書き込む → ポーリングで数秒後に
+ * KPT ボードへ並ぶ。再生成は AI 講評エントリだけを入れ替える (人間の KPT は残る)。
  * 静的ビルドにはエンドポイントが無いので App 側で import.meta.env.DEV でガードする。
  */
-export default function ReviewControl({ hasReview }: { hasReview: boolean }) {
+export default function ReviewControl({ hasAiFeedback }: { hasAiFeedback: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +26,11 @@ export default function ReviewControl({ hasReview }: { hasReview: boolean }) {
     <div className="review-control">
       {error && <span className="review-error">{`生成に失敗: ${error}`}</span>}
       <button type="button" className="review-generate" onClick={generate} disabled={busy}>
-        {busy ? 'AI 講評を生成中… (1〜2 分)' : hasReview ? 'AI 講評を再生成' : 'AI 講評を生成'}
+        {busy
+          ? 'AI 講評を生成中… (1〜2 分)'
+          : hasAiFeedback
+            ? 'AI 講評 (KPT) を再生成'
+            : 'AI 講評を KPT で生成'}
       </button>
     </div>
   );

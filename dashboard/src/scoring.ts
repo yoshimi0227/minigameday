@@ -98,6 +98,27 @@ export function effectiveScore(
   return Math.max(0, base - hintPenalty(inject, revealed));
 }
 
+/**
+ * 「GameDay 開始」ボタンの対象 = 最初の experimentTemplateId 付きインジェクト。
+ * 既に何かが始まっている (実験開始済み / pending 以外の status / 実験イベントあり) なら null。
+ * UI (GameControl) の表示判定と dev サーバ (/api/start) のガードの両方がこれを使う。
+ */
+export function findStartCandidate(data: GamedayData): Inject | null {
+  const started =
+    data.injects.some((i) => i.experimentStartedAt || (i.status && i.status !== 'pending')) ||
+    (data.events ?? []).some((e) => e.type === 'experiment');
+  if (started) return null;
+  return data.injects.find((i) => i.experimentTemplateId) ?? null;
+}
+
+/**
+ * 「リトライ (周回リセット)」を出してよいか = 振り返りフィードバックが残ったあと。
+ * KPT (feedback) が 1 件でもあれば「振り返りまで終わった」とみなす (AI 講評も feedback に載る)。
+ */
+export function canRetry(data: GamedayData): boolean {
+  return data.feedback.length > 0;
+}
+
 /** 手動の確定ステータス (自動導出はこれを上書きしない) */
 const MANUAL_FINAL: readonly InjectStatus[] = ['success', 'partial', 'failed'];
 
