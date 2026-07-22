@@ -51,6 +51,8 @@ jobs:
             - テスト: 変更に見合うテスト (Vitest + aws-cdk-lib/assertions) があるか
 
             確実性の低い指摘には 'nit:' を付ける。問題が無ければ「LGTM」と一言コメントする。
+            差分の把握は `gh pr diff` と Read/Grep で行うこと。許可されていないツールが
+            拒否されたら同じツールを繰り返さず、許可済みの手段に切り替えること。
           claude_args: |
-            --max-turns 30
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr checks:*)"
+            --max-turns 50
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr checks:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*)"
