@@ -1,0 +1,29 @@
+# PR / main push の検証。AWS 認証は不要 —
+# スタックは environment-agnostic (bin/minigameday.ts) で、コンテナビルドは
+# deploy-time-build (CodeBuild) のため synth に Docker も要らない。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # ツールチェーン (Vite+/Oxlint) が Node >= 22 必須
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run synth:nag

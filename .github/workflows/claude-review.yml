@@ -1,0 +1,56 @@
+# PR の AI 自動レビュー (anthropics/claude-code-action)。
+#
+# - 同一リポジトリ発の PR のみ自動実行 (フォーク PR には secrets が渡らないため対象外 —
+#   フォーク PR はメンテナが「@claude レビューして」とコメントすると claude.yml が拾う)。
+# - 認証はリポジトリ secrets の ANTHROPIC_API_KEY (console.anthropic.com で発行)。
+#   Claude Pro/Max サブスクリプションで動かす場合は `claude setup-token` で発行した
+#   トークンを CLAUDE_CODE_OAUTH_TOKEN に登録し、下の with を差し替える。
+name: Claude Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true # 追い push で古いレビューを打ち切る (コスト制御)
+
+jobs:
+  review:
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            この PR をレビューし、指摘は該当行へのインラインコメントで残してください (日本語で)。
+            このリポジトリは「クローンして各自の AWS アカウントでミニ GameDay を回す」配布物です。
+            CLAUDE.md と .claude/skills/ の規約を読み、特に以下を確認:
+
+            - 正当性: ロジックバグ、CDK の誤用 (FIS は L1 `CfnExperimentTemplate` のみ。
+              cross-stack Strong Reference を作らない)
+            - FIS 実験の安全装置: `stopConditions` 必須 / 爆発半径の明示
+              (resourceTags + selectionMode、または CDK 参照の resourceArns) / logConfiguration
+            - 配布衛生: アカウント固有値 (アカウント ID・ARN・FIS テンプレート ID) の混入。
+              dashboard/gameday.seed.json が定義の正で、実験は experimentTemplateName (Name タグ)
+              で指す。dashboard/public/data/gameday.json (実行時状態) は PR に含めない
+            - 採点・イベント導出ロジックは dashboard/src/scoring.ts に集約されているか。
+              gameday.json への書き込みは vite.config.ts の updateGamedayJson を通しているか
+            - テスト: 変更に見合うテスト (Vitest + aws-cdk-lib/assertions) があるか
+
+            確実性の低い指摘には 'nit:' を付ける。問題が無ければ「LGTM」と一言コメントする。
+          claude_args: |
+            --max-turns 10
+            --allowedTools "mcp__github_inline_comment__create_inline_comment"
