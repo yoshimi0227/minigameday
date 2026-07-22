@@ -2,9 +2,9 @@
 #
 # - 同一リポジトリ発の PR のみ自動実行 (フォーク PR には secrets が渡らないため対象外 —
 #   フォーク PR はメンテナが「@claude レビューして」とコメントすると claude.yml が拾う)。
-# - 認証はリポジトリ secrets の ANTHROPIC_API_KEY (console.anthropic.com で発行)。
-#   Claude Pro/Max サブスクリプションで動かす場合は `claude setup-token` で発行した
-#   トークンを CLAUDE_CODE_OAUTH_TOKEN に登録し、下の with を差し替える。
+# - 認証は Claude サブスクリプションの OAuth トークン (`claude setup-token` で発行し、
+#   リポジトリ secrets の CLAUDE_CODE_OAUTH_TOKEN に登録)。従量課金 API キーに切り替える
+#   場合は ANTHROPIC_API_KEY を登録して下の with を差し替える。
 name: Claude Review
 
 on:
@@ -32,8 +32,8 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             この PR をレビューし、指摘は該当行へのインラインコメントで残してください (日本語で)。
             このリポジトリは「クローンして各自の AWS アカウントでミニ GameDay を回す」配布物です。
