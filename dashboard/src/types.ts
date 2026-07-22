@@ -42,7 +42,13 @@ export interface Inject {
   maxScore?: number;
   notes?: string;
   hints?: Hint[];
-  /** FIS 実験テンプレート ID。イベントとの突き合わせキー (運営がセットアップ時に記入) */
+  /**
+   * FIS 実験テンプレートの Name タグ (例 "gameday-scale-to-zero")。アカウント非依存の指定方法で、
+   * seed (コミット対象) にはこちらを書く。dev サーバが起動時から 30 秒間隔で FIS API で ID に
+   * 解決し、experimentTemplateId へ書き込む (デプロイし直して ID が変わっても追従する)
+   */
+  experimentTemplateName?: string;
+  /** FIS 実験テンプレート ID。イベントとの突き合わせキー (通常は dev サーバが Name タグから解決して書く。手動指定も可) */
   experimentTemplateId?: string;
   /**
    * 以下 4 つは gameEventsSync が events[] から導出して書く (手編集しない)。
@@ -106,8 +112,6 @@ export interface GameEvent {
 /**
  * AI 講評が feedback[] に書き込むときの author 値。
  * 再生成時はこの author のエントリを入れ替える (人間の KPT は触らない)。
- * かつては独立した Review セクション + retrospectives/ レポートだったが、
- * 2026-07-18 に「講評も KPT 形式で同じボードへ」に一本化した。
  */
 export const AI_FEEDBACK_AUTHOR = 'AI 講評';
 

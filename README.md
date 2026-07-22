@@ -43,7 +43,9 @@ aws synthetics get-canary --name gameday-top --query "Canary.Status.State"  # RU
 #    canary 成功率が直近 100% (定常状態) であることが MTTR 算出の起点になる
 
 # (別ターミナル) 当日ダッシュボード — スコア表 / 検知・復旧チャート / KPT
-#    dashboard/public/data/gameday.json の編集で画面に即時反映
+#    dashboard/public/data/gameday.json の編集で画面に即時反映。
+#    このファイルは実行時状態 (git 管理外) — 無ければ dashboard/gameday.seed.json (定義の正) から
+#    自動生成され、FIS テンプレート ID も Name タグから自動解決される (クローン直後でもそのまま動く)
 npm run dashboard
 ```
 
@@ -161,16 +163,18 @@ npm run reset -- --dry-run   # 何が起きるかの確認だけ (変更なし)
 
 1. 実行中の FIS 実験(`gameday-*` テンプレート由来)を停止し、終了を待つ
 2. `cdk deploy --all --revert-drift` — 手動対応のドリフトをコードの状態へ巻き戻す
-   (drift-aware change set。新しめの CDK CLI が必要 — この環境の 2.1126.0 で確認済み。
+   (drift-aware change set。新しめの CDK CLI が必要 — 2.1126.0 で確認済み。
    terminate 済みの legacy EC2 の再作成もここで行われる)
 3. DynamoDB `gameday-score` の全アイテム削除 — **エスカレーションの `FIRED#` 冪等キーが
    残っていると 2 周目に自動発火しない**ため、ゲーム状態のワイプは必須
-4. gameday.json をインジェクト定義だけの初期状態へ(旧データは `dashboard/data-archive/` に退避)
+4. gameday.json を `dashboard/gameday.seed.json`(定義の正)から作り直す(旧データは
+   `dashboard/data-archive/` に退避)
 5. `npm run drift` 相当で "No drift" を確認
 
-スタックを保つので **FIS テンプレート ID は変わらない**(gameday.json の
-`experimentTemplateId` もそのまま使える)。scenario-03 で参加者が作った**スタック外**リソース
-だけは revert の対象外 — `scenarios/03-ec2-to-ecs-rebuild.md` の棚卸しリストで手動削除する。
+スタックを保つので FIS テンプレート ID は変わらず、`experimentTemplateId` はダッシュボードの
+dev サーバが Name タグ (`experimentTemplateName`) から 30 秒以内に再解決する。scenario-03 で
+参加者が作った**スタック外**リソースだけは revert の対象外 —
+`scenarios/03-ec2-to-ecs-rebuild.md` の棚卸しリストで手動削除する。
 
 **完全撤収 (課金停止)**:
 
@@ -194,9 +198,10 @@ injects[] の armed / impacted / recovered・検知/復旧時刻を自動導出 
    ▼ 実効スコア合計を POST /api/score → (下のエスカレーションへ)
 ```
 
-- **inject と実験の紐づけ**: `injects[].experimentTemplateId` に FIS テンプレート ID を記入して
-  おく (deploy 出力の `StopTaskTemplateId` 等)。実験を開始すると該当 inject が「実験進行中
-  (armed)」になる。
+- **inject と実験の紐づけ**: `injects[].experimentTemplateName` に FIS テンプレートの Name タグ
+  (`gameday-stop-one-task` 等) を記入しておくと、dev サーバが ID (`experimentTemplateId`) に
+  実行時解決する (アカウントごとに変わる ID をコミットしないため)。実験を開始すると該当 inject が
+  「実験進行中 (armed)」になる。
 - **検知宣言のガード**: 宣言ボタンは影響発生 (ALARM) 後にだけ有効。armed 中に押して検知満点を
   取る抜け道は dev サーバ側 (409) でも塞いでいる。
 - **フォールバック**: FIS イベントは best effort 配信なので、取り逃したら inject に

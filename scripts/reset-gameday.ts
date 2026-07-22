@@ -11,14 +11,15 @@
 //     terminate 済み legacy EC2 の再作成。スタックを保つので FIS テンプレート ID は変わらない。
 //   - ゲーム状態: gameday-score テーブルの全アイテム (SCORE / EVENT# / ACK# / FIRED#)。
 //     特に FIRED#<id> はエスカレーションの冪等クレームで、残っていると 2 周目に発火しない。
-//   - ダッシュボード: gameday.json から前回の実績 (導出フィールド・スコア・events・review 等) を
-//     除去し、インジェクト定義だけの初期状態に戻す。元ファイルは dashboard/data-archive/ に退避。
+//   - ダッシュボード: gameday.json (実行時状態。git 管理外) を dashboard/data-archive/ に退避し、
+//     gameday.seed.json (定義のみ。コミット対象 = 定義の正) から作り直す。seed の inject は
+//     experimentTemplateName (Name タグ) 指定なので、テンプレート ID は dev サーバが実行時に再解決する。
 //
 // 前提: AWS 認証済みシェルで実行する (dev サーバと同じ既定クレデンシャルチェーン)。
 // scenario-03 で参加者が手で作ったスタック外リソース (ECS サービス等) はここでは戻せない —
 // scenarios/03-ec2-to-ecs-rebuild.md の棚卸しリストに従って手動で削除する。
 
-import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
@@ -42,25 +43,13 @@ import {
 
 const ROOT = join(__dirname, '..');
 const DATA_PATH = join(ROOT, 'dashboard', 'public', 'data', 'gameday.json');
+const SEED_PATH = join(ROOT, 'dashboard', 'gameday.seed.json');
 const ARCHIVE_DIR = join(ROOT, 'dashboard', 'data-archive');
 const TABLE_NAME = process.env.GAMEDAY_SCORE_TABLE ?? 'gameday-score';
 const MAIN_STACK = 'GameDay';
 
 // FIS の実行中扱いのステータス (これらは停止対象。stopping は停止待ちで拾う)
 const ACTIVE_STATUSES = new Set(['pending', 'initiating', 'running']);
-
-// gameday.json のインジェクトで「セットアップ時に運営が書く静的フィールド」。
-// これ以外 (導出フィールド・実績・スコア類) はリセットで落とす。
-const KEEP_INJECT_FIELDS = [
-  'id',
-  'scenarioId',
-  'round',
-  'title',
-  'instruction',
-  'maxScore',
-  'hints',
-  'experimentTemplateId',
-] as const;
 
 interface Options {
   dryRun: boolean;
@@ -228,51 +217,39 @@ async function truncateScoreTable(ddb: DynamoDBClient, dryRun: boolean): Promise
   log(`   削除: ${keys.length} アイテム (${detail})`);
 }
 
-/** ステップ 4: gameday.json をアーカイブしてインジェクト定義だけの初期状態に戻す */
+/**
+ * ステップ 4: gameday.json をアーカイブし、gameday.seed.json (定義のみ・コミット対象) から
+ * 作り直す。定義の正は seed に一本化 — 恒久的な定義変更 (インジェクト・systems・scoring 等) は
+ * seed を編集する。live への場当たり編集はリセットで消える (実績は archive に残る)。
+ * seed の inject は experimentTemplateName だけを持ち、experimentTemplateId は
+ * dev サーバが Name タグから実行時に再解決する (アカウント・デプロイごとに変わるため)。
+ */
 function resetGamedayJson(dryRun: boolean): void {
-  const raw = readFileSync(DATA_PATH, 'utf8');
-  const data = JSON.parse(raw) as Record<string, unknown>;
-  const injects = (data.injects ?? []) as Record<string, unknown>[];
+  const seedRaw = readFileSync(SEED_PATH, 'utf8');
+  const seedInjects = (JSON.parse(seedRaw) as { injects?: unknown[] }).injects ?? [];
+  const hasLive = existsSync(DATA_PATH);
 
   if (dryRun) {
-    const dynamic = ['events', 'feedback', 'hintReveals']
-      .filter((k) => {
-        const v = data[k];
-        return Array.isArray(v) ? v.length > 0 : v !== undefined;
-      })
-      .join(', ');
-    log(`   [dry-run] インジェクト ${injects.length} 件を初期化。クリア対象: ${dynamic || '(なし)'}`);
+    log(
+      `   [dry-run] seed から作り直す (インジェクト ${seedInjects.length} 件)。` +
+        `旧データ: ${hasLive ? 'archive へ退避' : '(実体なし — 退避不要)'}`,
+    );
     return;
   }
 
-  mkdirSync(ARCHIVE_DIR, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const archivePath = join(ARCHIVE_DIR, `gameday-${stamp}.json`);
-  writeFileSync(archivePath, raw);
-
-  // インジェクトは静的フィールドだけ残し、status を pending へ。トップレベルの実績も落とす
-  const reset: Record<string, unknown> = {};
-  if (data.event !== undefined) reset.event = data.event;
-  if (data.rounds !== undefined) reset.rounds = data.rounds;
-  if (data.systems !== undefined) reset.systems = data.systems;
-  reset.injects = injects.map((inject) => {
-    const out: Record<string, unknown> = {};
-    for (const field of KEEP_INJECT_FIELDS) {
-      if (inject[field] !== undefined) out[field] = inject[field];
-    }
-    out.status = 'pending';
-    return out;
-  });
-  reset.feedback = []; // AI 講評含む KPT は持ち越さない (前回分は archive に残る)
-  reset.hintReveals = [];
-  if (data.scoring !== undefined) reset.scoring = data.scoring;
-  reset.events = [];
+  if (hasLive) {
+    mkdirSync(ARCHIVE_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const archivePath = join(ARCHIVE_DIR, `gameday-${stamp}.json`);
+    writeFileSync(archivePath, readFileSync(DATA_PATH, 'utf8'));
+    log(`   旧データ: ${archivePath}`);
+  }
 
   // dev サーバのポーリングに部分書き込みを読ませない (vite.config.ts と同じ tmp→rename)
   const tmp = `${DATA_PATH}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(reset, null, 2)}\n`);
+  writeFileSync(tmp, seedRaw);
   renameSync(tmp, DATA_PATH);
-  log(`   初期化完了。旧データ: ${archivePath}`);
+  log(`   初期化完了 (seed から ${seedInjects.length} インジェクト)`);
 }
 
 async function main(): Promise<void> {
@@ -318,7 +295,7 @@ async function main(): Promise<void> {
     return;
   }
   log('リセット完了。canary が緑に戻るまで数分待ってから次のラウンドを開始する。');
-  log('(ダッシュボードは開き直せば初期状態。FIS テンプレート ID は変わっていない)');
+  log('(ダッシュボードは開き直せば初期状態。experimentTemplateId は dev サーバが 30 秒以内に Name タグから再解決する)');
 }
 
 main().catch((e: unknown) => {

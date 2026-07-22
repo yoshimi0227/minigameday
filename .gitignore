@@ -5,6 +5,10 @@ node_modules/
 # Dashboard build artifacts
 dashboard/dist/
 
+# GameDay の実行時状態 (利用者ごと)。定義は dashboard/gameday.seed.json (コミット対象) が正で、
+# 実体は dev サーバ / ビルドが seed から生成し、npm run reset が seed から作り直す
+dashboard/public/data/gameday.json
+
 # CDK context with account-specific data (commit cdk.json, ignore local)
 cdk.context.json
 

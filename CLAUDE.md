@@ -1,7 +1,7 @@
 # ミニ GameDay (振り返り機能付き)
 
 生成AI × AWS CDK × AWS FIS で「振り返れる」ミニ GameDay をつくるプロジェクト。
-CFP 登壇用。3年前の「AWS CDK × AWS FIS でミニ GameDay をつくろう」の 2026 年アップデート版。
+クローンして各自の AWS アカウントで GameDay を回せる配布物でもある。
 
 ## このプロジェクトの 3 本柱
 
@@ -67,7 +67,9 @@ lib/            スタック・コンストラクト定義
 lambda/         Lambda ソース (score-escalator / game-events。ESM .mjs、NodejsFunction でバンドル)
 app/            対象アプリのソース (DB に ping する Node アプリ + Dockerfile)
 scenarios/      AI が生成した GameDay シナリオ (markdown, frontmatter 付き)
-dashboard/      スコア表・振り返りダッシュボード (React + TypeScript。データは public/data/gameday.json)
+dashboard/      スコア表・振り返りダッシュボード (React + TypeScript)
+  gameday.seed.json    ゲーム定義の正 (コミット対象)。FIS 実験は experimentTemplateName (Name タグ) で指す
+  public/data/gameday.json  実行時状態 (git 管理外)。無ければ seed から生成、テンプレート ID は dev サーバが実行時解決
   review-generator.ts  AI 講評生成 (dev サーバ専用。KPT 形式で feedback[] へ書き込む)
   data-archive/        npm run reset が旧 gameday.json を退避する先 (自動)
 scripts/        運用スクリプト (reset-gameday.ts = 周回リセット)
@@ -90,21 +92,20 @@ test/           CDK ユニットテスト
 - `cdk deploy` は自動許可、`cdk destroy` / `cdk bootstrap` は都度確認。
 - コスト注意: Fargate / RDS / NAT Gateway は起動しっぱなしで課金される。GameDay 終了後は `cdk destroy` する前提で組む。FIS の実験レポートも 1 通ごとに課金される。
 
-## 検証済み技術メモ (2026-07-07 時点)
+## 検証済み技術メモ
 
 - **Synthetics Playwright ランタイム**: 最新は `syn-nodejs-playwright-7.1` (Node.js 22 / Playwright 1.59)。5.1 以降は namespace が `@aws/synthetics-playwright`(旧 `@amzn/...` は非推奨)。型定義は npm にあり、ランタイムとバージョンを合わせる。
 - **CDK の Playwright ランタイム定数**: `synthetics.Runtime.SYNTHETICS_NODEJS_PLAYWRIGHT_*`(aws-cdk-lib 2.258.1 では `6_0` が最新定数)。現在このプロジェクトは 6.0 を使用。定数未提供の新ランタイムは `new synthetics.Runtime('syn-nodejs-playwright-7.1', synthetics.RuntimeFamily.NODEJS)` で指定できる。
-- **Vite+ / Oxlint の前提**: ツールチェーンは Node.js >= 22 が必要 (この環境は Node 24.18 / npm 11)。Node が古いと npm が optional 依存のネイティブバイナリを**黙ってスキップ**し「Cannot find native binding」で落ちる。corsa-oxlint (型認識リント) は Windows で JS シムを spawn する不具合があり、`vite.config.ts` の `settings.corsaOxlint.corsa.executable` で `tsgo.exe` を明示している。
+- **Vite+ / Oxlint の前提**: ツールチェーンは Node.js >= 22 が必要。Node が古いと npm が optional 依存のネイティブバイナリを**黙ってスキップ**し「Cannot find native binding」で落ちる。corsa-oxlint (型認識リント) は Windows で JS シムを spawn する不具合があり、`vite.config.ts` の `settings.corsaOxlint.corsa.executable` で `tsgo.exe` を明示している。
 - **FIS は L1 のみ**: `aws-cdk-lib/aws-fis` は `CfnExperimentTemplate` だけ。L2 を探さない。アクション仕様の検証メモは `.claude/skills/fis-experiment/references/fis-actions.md`。
-- **NodejsFunction のバンドルは CJS 出力にする (2026-07-17 実機で確認)**: `format: ESM` + `externalModules: []` で CJS の AWS SDK を同梱すると Lambda が `Dynamic require of "node:https" is not supported` で Init クラッシュする。定石の createRequire banner は **Windows のローカルバンドルでシェルにダブルクォートを剥がされて SyntaxError** になるため使えない。`OutputFormat.CJS` なら両問題が消える (.mjs ソースのままで可。トップレベル await を使う場合のみ再考)。
-- **tags 付き `fis:StartExperiment` には `fis:TagResource` も要る (2026-07-17 実機で確認)**: 開始時タグは新規実験へのタグ付けとして別権限が要求され、無いと AccessDenied。ユニットテストでは捕まらない — 「AI に書かせて実機で一巡」の検証ループを省略しない。
+- **NodejsFunction のバンドルは CJS 出力にする (実機で確認済み)**: `format: ESM` + `externalModules: []` で CJS の AWS SDK を同梱すると Lambda が `Dynamic require of "node:https" is not supported` で Init クラッシュする。定石の createRequire banner は **Windows のローカルバンドルでシェルにダブルクォートを剥がされて SyntaxError** になるため使えない。`OutputFormat.CJS` なら両問題が消える (.mjs ソースのままで可。トップレベル await を使う場合のみ再考)。
+- **tags 付き `fis:StartExperiment` には `fis:TagResource` も要る (実機で確認済み)**: 開始時タグは新規実験へのタグ付けとして別権限が要求され、無いと AccessDenied。ユニットテストでは捕まらない — 「AI に書かせて実機で一巡」の検証ループを省略しない。
 - **FIS でネイティブアクションが無い操作は `aws:ssm:start-automation-execution`**: FIS には ECS の desiredCount 変更や SG ルール削除のネイティブアクションが無い。SSM Automation ドキュメント (`aws:executeAwsApi` ステップ) を FIS から起動する。パラメータ = `documentArn` / `documentParameters` (JSON 文字列) / `maxDuration` (PT1M〜PT12H)。FIS ロール権限 = `ssm:StartAutomationExecution`/`GetAutomationExecution`/`StopAutomationExecution` + `iam:PassRole` (automation ロール)。`documentParameters` にトークン (ARN/名前) を入れるときは `JSON.stringify` ではなく `stack.toJsonString(...)` を使う (トークンを Fn::Join で解決)。scale-to-zero (scenario-05) がこのパターン。
 - **`cdk drift` と `cdk diff` は別物**: drift は実リソース vs スタックの期待状態(振り返りで使うのはこっち)、diff はローカルコード vs デプロイ済みテンプレート。
-- **対象アプリのコンテナビルドはローカル Docker 非依存 (2026-07-18 実機で確認)**: `TargetApp` は `ecs.ContainerImage.fromAsset` ではなく **`@cdklabs/deploy-time-build`** (旧 `deploy-time-build` は deprecated、必ずスコープ付きの方を使う) の `ContainerImageBuild` を使う。`directory` はプレーンな S3 アセット (zip) としてアップロードされるだけで、実際の `docker build` は deploy 時に起動される CodeBuild (`privileged: true` で Docker-in-Docker) 上で行われる — synth/deploy するマシンに Docker は不要で、CPU アーキテクチャにも依存しない (`ecs.ContainerImage.fromAsset` はローカル docker build のため、Arm ホスト (Apple Silicon 等) でビルドすると Fargate 既定の X86_64 と食い違い `exec format error` でタスクが起動しない — 実機で踏んだ)。`platform` prop で明示的にビルド対象アーキテクチャ (既定 `LINUX_AMD64`) を指定できる。ライブラリ内部の Lambda (トリガー用カスタムリソース) と CodeBuild プロジェクトは cdk-nag (`AwsSolutions-L1` / `AwsSolutions-CB4`) に引っかかる — ランタイム/暗号化設定を呼び出し側から変更できないため `lib/nag-suppressions.ts` で理由付き抑制。
-- **AI 講評は Bedrock Converse API + Amazon Nova Lite (2026-07-18 実機で E2E 確認)**: `dashboard/review-generator.ts` は `@aws-sdk/client-bedrock-runtime` の `ConverseCommand` で呼ぶ (モデル非依存)。既定モデルは `apac.amazon.nova-lite-v1:0` (APAC クロスリージョン推論プロファイル)。環境変数 `GAMEDAY_REVIEW_MODEL` / `GAMEDAY_BEDROCK_REGION` / `AWS_BEARER_TOKEN_BEDROCK` で上書き可。Converse には Anthropic の json_schema 強制が無いため、スキーマをプロンプト埋め込み + コードフェンス剥がし + 受信側検証で担保している。
-  - **Claude (Anthropic モデル) を使わない理由**: このアカウントは新世代 (4.5+) が「not available for this account」403 (利用規約同意は受理済み・制御プレーン AVAILABLE でも推論プレーンで拒否 — ユースケースフォームが「None of the Above / 個人検証」のためと推測、再提出は見送り判断)、旧世代 (claude-3.x / sonnet-4) は「Legacy 30日未使用」ブロックで、**全世代が推論不可** (2026-07-18 確定)。解禁されたら `GAMEDAY_REVIEW_MODEL` に Claude の推論プロファイル ID を渡すだけで戻せる。
-  - ダッシュボードの「AI 講評を KPT で生成」ボタンは Nova で動作する。**講評は KPT 形式で feedback[] (author='AI 講評') に書き込む** (2026-07-18 に独立 review セクション + retrospectives/ レポートを廃止)。講評の直前に **`cdk drift` (CDK CLI)** を子プロセス実行 (`dashboard/drift-detector.ts`、全スタック・240 秒打ち切り・ベストエフォート・生出力をそのまま材料化) して含める — 宣言されていない手動変更 (想定外の手作業) を problem として指摘させ、宣言済みの手動対応には `cdk deploy --revert-drift` での IaC 還元を try で出させるため。より厚い講評は gameday-retrospective スキル (Claude Code) でも生成できる (出力先は同じ feedback[])。
-- **AWS 構成図の生成 (ハンドアウト/登壇資料用) は `aws-architecture-diagram` スキル** (Claude Code プラグイン `deploy-on-aws@agent-plugins-for-aws`、user スコープ導入済み 2026-07-15)。AWS4 公式アイコンの draw.io XML を生成し、PostToolUse フックが自動検証、`drawio_url.py` で diagrams.net プレビュー URL を出せる。前提: `python3` + `defusedxml` (導入済み)。PNG/SVG 書き出しは draw.io desktop の CLI を使う。**旧 AWS Diagram MCP (`awslabs.aws-diagram-mcp-server`) は全バージョン yank 済みの非推奨のため使わない** (このスキルが公式後継)。ダッシュボードの構成図は aws-icons による React 描画 (`dashboard/src/Architecture.tsx`) で、プラグインには依存しない — 役割分担: 画面 = React 描画、配布物 = このスキル。
+- **対象アプリのコンテナビルドはローカル Docker 非依存**: `TargetApp` は `ecs.ContainerImage.fromAsset` ではなく **`@cdklabs/deploy-time-build`** (旧 `deploy-time-build` は deprecated、必ずスコープ付きの方を使う) の `ContainerImageBuild` を使う。`directory` はプレーンな S3 アセット (zip) としてアップロードされるだけで、実際の `docker build` は deploy 時に起動される CodeBuild (`privileged: true` で Docker-in-Docker) 上で行われる — synth/deploy するマシンに Docker は不要で、CPU アーキテクチャにも依存しない (`ecs.ContainerImage.fromAsset` はローカル docker build のため、Arm ホスト (Apple Silicon 等) でビルドすると Fargate 既定の X86_64 と食い違い `exec format error` でタスクが起動しない — 実機で踏んだ)。`platform` prop で明示的にビルド対象アーキテクチャ (既定 `LINUX_AMD64`) を指定できる。ライブラリ内部の Lambda (トリガー用カスタムリソース) と CodeBuild プロジェクトは cdk-nag (`AwsSolutions-L1` / `AwsSolutions-CB4`) に引っかかる — ランタイム/暗号化設定を呼び出し側から変更できないため `lib/nag-suppressions.ts` で理由付き抑制。
+- **AI 講評は Bedrock Converse API + Amazon Nova Lite**: `dashboard/review-generator.ts` は `@aws-sdk/client-bedrock-runtime` の `ConverseCommand` で呼ぶ (モデル非依存)。既定モデルは `apac.amazon.nova-lite-v1:0` (APAC クロスリージョン推論プロファイル)。環境変数 `GAMEDAY_REVIEW_MODEL` / `GAMEDAY_BEDROCK_REGION` / `AWS_BEARER_TOKEN_BEDROCK` で上書き可 (Claude 等の別モデルを使うなら `GAMEDAY_REVIEW_MODEL` に推論プロファイル ID を渡す)。Converse には json_schema 強制が無いため、スキーマをプロンプト埋め込み + コードフェンス剥がし + 受信側検証で担保している。
+  - **講評は KPT 形式で feedback[] (author='AI 講評') に書き込む** (独立した講評セクションやレポートファイルは作らない)。講評の直前に **`cdk drift` (CDK CLI)** を子プロセス実行 (`dashboard/drift-detector.ts`、全スタック・240 秒打ち切り・ベストエフォート・生出力をそのまま材料化) して含める — 宣言されていない手動変更 (想定外の手作業) を problem として指摘させ、宣言済みの手動対応には `cdk deploy --revert-drift` での IaC 還元を try で出させるため。より厚い講評は gameday-retrospective スキル (Claude Code) でも生成できる (出力先は同じ feedback[])。
+- **AWS 構成図の生成 (ハンドアウト/登壇資料用) は `aws-architecture-diagram` スキル** (Claude Code プラグイン `deploy-on-aws@agent-plugins-for-aws`)。AWS4 公式アイコンの draw.io XML を生成し、PostToolUse フックが自動検証、`drawio_url.py` で diagrams.net プレビュー URL を出せる。前提: `python3` + `defusedxml`。PNG/SVG 書き出しは draw.io desktop の CLI を使う。**旧 AWS Diagram MCP (`awslabs.aws-diagram-mcp-server`) は全バージョン yank 済みの非推奨のため使わない** (このスキルが公式後継)。ダッシュボードの構成図は aws-icons による React 描画 (`dashboard/src/Architecture.tsx`) で、プラグインには依存しない — 役割分担: 画面 = React 描画、配布資料 = このスキル。
 
 ## よく使うコマンド
 
@@ -118,7 +119,7 @@ npm run synth          # cdk synth (全スタック)
 npm run diff           # cdk diff
 npm run deploy         # cdk deploy --all (GameDay → GameDay-Legacy の順)。単体は npx cdk deploy GameDay 等
 npm run drift          # cdk drift (振り返り。ポーリング込み)
-npm run reset          # 周回リセット (実験停止 → revert-drift → gameday-score ワイプ → gameday.json 初期化。destroy しない)
+npm run reset          # 周回リセット (実験停止 → revert-drift → gameday-score ワイプ → gameday.json を seed から再生成。destroy しない)
 npm run destroy        # cdk destroy --all (都度確認。完全撤収のときだけ)
 aws fis start-experiment --experiment-template-id <id>      # 障害注入
 aws fis get-experiment --id <id>                            # 実験の状態・タイムライン

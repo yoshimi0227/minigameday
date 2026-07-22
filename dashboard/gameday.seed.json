@@ -1,7 +1,6 @@
 {
   "event": {
-    "title": "ミニ GameDay",
-    "date": "2026-07-18"
+    "title": "ミニ GameDay"
   },
   "systems": [
     {
@@ -92,7 +91,7 @@
           "text": "aws ecs update-service --desired-count 2 で戻す。"
         }
       ],
-      "experimentTemplateId": "EXTDNmsZ4yUftuD7e",
+      "experimentTemplateName": "gameday-scale-to-zero",
       "status": "pending"
     }
   ],

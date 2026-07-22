@@ -4,11 +4,10 @@
 // (drift-detector.ts。宣言されていない手動変更 = 想定外の手作業の検知) から
 // KPT 形式の講評を作る。
 // 生成物は feedback[] に author='AI 講評' で書き込まれ、KPT ボードに人間の
-// フィードバックと並んで表示される (独立した review セクションは 2026-07-18 に廃止)。
+// フィードバックと並んで表示される。
 //
-// モデルは Converse API で呼べるものなら何でもよい (モデル非依存)。既定は Amazon Nova Lite —
-// このアカウントは Anthropic モデル (Claude) が全世代アクセス不可のため (CLAUDE.md 検証済みメモ
-// 2026-07-18)。Claude が解禁されたら GAMEDAY_REVIEW_MODEL に推論プロファイル ID を渡すだけで戻せる。
+// モデルは Converse API で呼べるものなら何でもよい (モデル非依存)。既定は Amazon Nova Lite。
+// Claude 等の別モデルを使うときは GAMEDAY_REVIEW_MODEL に推論プロファイル ID を渡す。
 //
 // 認証は既定の AWS 認証チェーン (または AWS_BEARER_TOKEN_BEDROCK)。
 // リージョン/モデルは GAMEDAY_BEDROCK_REGION / GAMEDAY_REVIEW_MODEL で上書きできる。
@@ -109,7 +108,7 @@ export async function generateReview(
 ): Promise<Feedback[]> {
   // systems (構成図) は講評の材料として過剰なので落とし、実測系だけ渡す。
   // 採点は LLM に計算させず scoring.ts の確定値 (computedScore) を添える
-  // (Nova Lite は減衰カーブの計算を誤る — 2026-07-18 リハーサルで実測)。
+  // (Nova Lite は減衰カーブの計算を誤ることを実測済み)。
   const scoringConfig = data.scoring ?? DEFAULT_SCORING;
   const material = {
     event: data.event,

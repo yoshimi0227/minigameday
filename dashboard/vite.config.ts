@@ -1,11 +1,15 @@
 import { spawn } from 'node:child_process';
-import { readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react-oxc';
 import { DynamoDBClient, PutItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { FisClient, StartExperimentCommand } from '@aws-sdk/client-fis';
+import {
+  FisClient,
+  ListExperimentTemplatesCommand,
+  StartExperimentCommand,
+} from '@aws-sdk/client-fis';
 import { deriveFromEvents, findStartCandidate } from './src/scoring';
 import { generateReview } from './review-generator';
 import { collectDriftMaterial } from './drift-detector';
@@ -68,6 +72,77 @@ interface ApiResult {
 
 function gamedayJsonPath(server: ViteDevServer): string {
   return join(server.config.root, 'public', 'data', 'gameday.json');
+}
+
+/**
+ * データファイルの bootstrap と FIS テンプレート ID の実行時解決。
+ *
+ * gameday.json (実体) は利用者ごとの実行時状態なので git 管理外 — 定義 (インジェクト・
+ * systems・scoring) はコミット対象の gameday.seed.json が正。クローン直後などで実体が
+ * 無ければ seed からコピーして作る (dev / build 両方で効くよう configResolved で行う)。
+ *
+ * テンプレート ID 解決: seed の inject は experimentTemplateName (FIS テンプレートの
+ * Name タグ。CDK が付ける gameday-* 固定値) で実験を指すため、アカウント・デプロイごとに
+ * 変わる ID を含まない。dev サーバが起動時から 30 秒間隔で ListExperimentTemplates を引き、
+ * Name タグ → ID を experimentTemplateId に書き込む (destroy→deploy 後の ID 変化や
+ * 周回リセット直後にも自動で追従する)。ベストエフォート: 未認証・未デプロイでは解決
+ * されないだけで画面は壊さない (開始ボタンが出ない = 実験を開始できない状態と一致)。
+ */
+function gamedayDataBootstrap(): Plugin {
+  const fis = new FisClient({});
+  const RESOLVE_MS = 30_000;
+  let lastError = '';
+  return {
+    name: 'gameday-data-bootstrap',
+    configResolved(config) {
+      const dataPath = join(config.root, 'public', 'data', 'gameday.json');
+      if (existsSync(dataPath)) return;
+      mkdirSync(dirname(dataPath), { recursive: true });
+      copyFileSync(join(config.root, 'gameday.seed.json'), dataPath);
+      console.log('[gameday] gameday.json が無いので gameday.seed.json から作成した');
+    },
+    configureServer(server: ViteDevServer) {
+      const dataPath = gamedayJsonPath(server);
+      const tick = async () => {
+        try {
+          const idByName = new Map<string, string>();
+          let nextToken: string | undefined;
+          do {
+            const page = await fis.send(new ListExperimentTemplatesCommand({ nextToken }));
+            for (const t of page.experimentTemplates ?? []) {
+              if (t.id && t.tags?.Name) idByName.set(t.tags.Name, t.id);
+            }
+            nextToken = page.nextToken;
+          } while (nextToken);
+          await updateGamedayJson(dataPath, (data) => {
+            let changed = false;
+            for (const inject of data.injects) {
+              if (!inject.experimentTemplateName) continue;
+              const id = idByName.get(inject.experimentTemplateName);
+              if (id && inject.experimentTemplateId !== id) {
+                inject.experimentTemplateId = id;
+                changed = true;
+              }
+            }
+            return { changed, result: undefined };
+          });
+          if (lastError) {
+            console.log('[gameday] テンプレート ID 解決が復帰した');
+            lastError = '';
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg !== lastError) {
+            console.error(`[gameday] FIS テンプレート ID 解決に失敗 (継続します): ${msg}`);
+            lastError = msg;
+          }
+        }
+      };
+      void tick();
+      const timer = setInterval(() => void tick(), RESOLVE_MS);
+      server.httpServer?.on('close', () => clearInterval(timer));
+    },
+  };
 }
 
 /**
@@ -507,6 +582,7 @@ function gameEventsSync(): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    gamedayDataBootstrap(),
     hintRevealApi(),
     ackApi(),
     scoreSyncApi(),
