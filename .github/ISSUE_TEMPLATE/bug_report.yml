@@ -1,0 +1,39 @@
+name: バグ報告
+description: 動かない・壊れた・期待と違う挙動の報告
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 何が起きたか
+      description: 期待した挙動と、実際に起きたことを書いてください
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 再現手順
+      placeholder: |
+        1. npm ci
+        2. npm run deploy
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: OS / Node.js / npm のバージョン、AWS リージョン
+      placeholder: |
+        - OS: Windows 11 / macOS 15 / Ubuntu 24.04
+        - Node: node -v の出力
+        - npm: npm -v の出力
+        - リージョン: ap-northeast-1
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: ログ・エラー出力
+      description: 関連するエラーメッセージや CloudFormation のイベント (アカウント ID などは伏せてください)
+      render: shell

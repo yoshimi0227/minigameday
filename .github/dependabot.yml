@@ -1,0 +1,23 @@
+# 依存の自動更新。cooldown で「公開されたばかりのバージョン」を一定期間避ける
+# (メンテナ乗っ取り直後の汚染バージョンを掴まないためのサプライチェーン対策。
+#  Takumi Guard のブロックリスト型と相補的な時間差防御)。
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7

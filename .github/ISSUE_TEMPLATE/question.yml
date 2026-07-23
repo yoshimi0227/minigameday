@@ -1,0 +1,11 @@
+name: 質問
+description: 使い方・設計についての質問
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: 質問内容
+      description: README / CLAUDE.md / CONTRIBUTING を読んだうえで分からなかったことを書いてください
+    validations:
+      required: true

@@ -1,0 +1,28 @@
+name: シナリオ提案
+description: 新しい GameDay 障害シナリオのアイデア
+labels: [scenario]
+body:
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: 仮説
+      description: 「この障害が起きたら、システムは/参加者はこう振る舞うはず」という仮説
+    validations:
+      required: true
+  - type: textarea
+    id: fault
+    attributes:
+      label: 注入する障害
+      description: 何をどう壊すか (FIS アクションの心当たりがあれば)
+    validations:
+      required: true
+  - type: textarea
+    id: observability
+    attributes:
+      label: 観測ポイント
+      description: |
+        どうやって「見える」か (canary / アラーム / メトリクス)。
+        このリポジトリの鉄則: 観測できない仮説は検証できない。
+        観測窓 (canary は 1 分間隔) より速く自己回復する障害は見えないことに注意。
+    validations:
+      required: true

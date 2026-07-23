@@ -1,6 +1,9 @@
 {
   "name": "minigameday",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc && tsc -p dashboard",
     "watch": "tsc -w",
