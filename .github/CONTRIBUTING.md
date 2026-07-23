@@ -8,6 +8,18 @@ PR を歓迎します。このリポジトリは「クローンして各自の A
 - Node.js >= 22 (ツールチェーンの Vite+ / Oxlint が要求。古い Node では npm がネイティブバイナリを黙ってスキップして壊れる)
 - AWS アカウント (デプロイして動かす場合のみ。CI と静的検証はローカルだけで完結)
 
+## サプライチェーン対策 (Takumi Guard)
+
+`.npmrc` により、npm パッケージは [Takumi Guard](https://flatt.tech/takumi/features/guard)
+(GMO Flatt Security のレジストリプロキシ) 経由で取得されます。既知の悪性パッケージは
+ダウンロード前に **403 でブロック**されます — `npm install` が 403 で失敗したら、それは
+ブロックが働いた合図なので、そのパッケージは入れずに issue で相談してください。
+
+- 追加設定は不要 (クローンした時点で有効。CI も同じ)
+- package-lock.json の `resolved` が `npm.flatt.tech` を指すのは正常 (integrity ハッシュで
+  同一性は担保される)。手で registry.npmjs.org に戻さない
+- プロキシ障害時の緊急回避: `npm ci --registry=https://registry.npmjs.org/`
+
 ## 1. 検証ループを一巡させる
 
 ```bash

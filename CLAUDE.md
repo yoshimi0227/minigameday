@@ -22,6 +22,7 @@
 - **コンプライアンス検査**: cdk-nag (AwsSolutionsChecks)。`npm run synth:nag` で実行。通常 deploy は速さ優先で無効、意図的な GameDay トレードオフは `lib/nag-suppressions.ts` に理由付きで集約
 - **CDK アプリ実行**: `tsx` (cdk.json の `app`)。ts-node は使わない
 - **コミット前フック**: lefthook (`lefthook.yml`) が pre-commit で `npm run lint` を走らせる
+- **サプライチェーン対策**: `.npmrc` で Takumi Guard (レジストリプロキシ) 経由。悪性パッケージは 403 でブロックされる。npm 11 の `allowScripts` (インストールスクリプト明示承認) と package-lock + `npm ci` も防御レイヤーの一部
 
 ## 3 本柱とスキル・エージェントの対応
 
