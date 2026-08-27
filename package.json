@@ -35,7 +35,7 @@
     "@vitejs/plugin-react-oxc": "^0.4.3",
     "@voidzero-dev/vite-plus-core": "^0.2.2",
     "aws-cdk": "2.1126.0",
-    "cdk-nag": "^2.38.2",
+    "cdk-nag": "^3.0.1",
     "jsdom": "^29.1.1",
     "lefthook": "^2.1.10",
     "oxlint-plugin-awscdk": "^0.1.3",
